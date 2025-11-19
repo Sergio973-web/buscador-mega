@@ -44,19 +44,27 @@ export default function handler(req, res) {
     .filter(p => !(minPrice !== null && (p.precioNum === null || p.precioNum < minPrice)) &&
                  !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice)));
 
-  // Búsqueda estricta con normalización
+  // --- BÚSQUEDA AVANZADA ---
   if (q) {
-    const palabras = q.toLowerCase().split(/\s+/); // dividir la query en palabras
+    // Normalizar y dividir en palabras
+    const palabras = q
+      .toLowerCase()
+      .split(/\s+/)
+      .map(p => normalizaciones[p] || p)  // corregir cada palabra
+      .filter(Boolean);
+
     results = results.filter(p => {
-      const titulo = p.titulo.toLowerCase();
-      const proveedor = p.proveedor.toLowerCase();
-      // cada palabra debe aparecer en el título o proveedor
-      return palabras.every(palabra => titulo.includes(palabra) || proveedor.includes(palabra));
+      const texto = `${p.titulo} ${p.proveedor}`.toLowerCase();
+
+      // Cada palabra debe existir en el texto, sin importar el orden
+      return palabras.every(palabra => texto.includes(palabra));
     });
 
+    // Ordenamiento
     if (sort === "price_asc") results.sort((a,b)=> (a.precioNum||0)-(b.precioNum||0));
     else if (sort === "price_desc") results.sort((a,b)=> (b.precioNum||0)-(a.precioNum||0));
   }
+
 
   const total = results.length;
   const start = (page - 1) * perPage;
