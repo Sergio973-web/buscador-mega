@@ -32,8 +32,9 @@ export default function handler(req, res) {
 
   // Buscar texto
   if (q) {
-    const fuse = new Fuse(results, { keys: ["titulo", "proveedor"], threshold: 0.4, ignoreLocation: true, distance: 200 });
+    const fuse = new Fuse(results, { keys: ["titulo", "proveedor"], threshold: 0.05 });
     results = fuse.search(q, { limit: 1000 }).map(r => ({ ...r.item, score: r.score }));
+
     if (sort === "price_asc") results.sort((a, b) => (a.precioNum || 0) - (b.precioNum || 0));
     else if (sort === "price_desc") results.sort((a, b) => (b.precioNum || 0) - (a.precioNum || 0));
     else results.sort((a, b) => (a.score - b.score));
