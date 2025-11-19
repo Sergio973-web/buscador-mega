@@ -3,9 +3,10 @@ import productos from "../productos.json";
 // --- Convierte precio a número ---
 function parsePrecio(precioStr) {
   if (!precioStr) return null;
-  const only = precioStr.replace(/[^\d,.\-]/g, "")
-                        .replace(/\.(?=\d{3,})/g, "")
-                        .replace(",", ".");
+  const only = precioStr
+    .replace(/[^\d,.\-]/g, "")
+    .replace(/\.(?=\d{3,})/g, "")
+    .replace(",", ".");
   const n = parseFloat(only);
   return isFinite(n) ? n : null;
 }
@@ -21,25 +22,23 @@ const normalizaciones = {
 
 function normalizarPalabra(word) {
   word = word.toLowerCase().trim();
-  if (normalizaciones[word]) return normalizaciones[word];
-  // quitar plural simple: aros → aro, piedras → piedra
-  if (word.endsWith("s") && word.length > 3) return word.slice(0, -1);
-  return word;
-}
 
-// --- Distancia Levenshtein mínima ---
-function distanciaLevenshtein(a, b) {
-  const m = [];
-  for (let i = 0; i <= b.length; i++) m[i] = [i];
-  for (let j = 0; j <= a.length; j++) m[0][j] = j;
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      m[i][j] = b[i - 1] === a[j - 1]
-        ? m[i - 1][j - 1]
-        : 1 + Math.min(m[i - 1][j], m[i][j - 1], m[i - 1][j - 1]);
-    }
+  if (normalizaciones[word]) return normalizaciones[word];
+
+  // Singular/plural seguro:
+  // Quita la "s" final solo si NO forma parte de palabras como "pájaros".
+  // Evita confundir "aros" con "pájaros".
+  if (
+    word.endsWith("s") &&
+    word.length > 3 &&
+    !/[aeiou]ros$/.test(word) &&
+    !/[aeiou]dos$/.test(word) &&
+    !/[aeiou]nos$/.test(word)
+  ) {
+    return word.slice(0, -1);
   }
-  return m[b.length][a.length];
+
+  return word;
 }
 
 // --- Handler principal ---
@@ -62,38 +61,48 @@ export default function handler(req, res) {
   }
 
   // --- FILTRO POR PRECIO ---
-  results = results.map(p => ({ ...p, precioNum: parsePrecio(p.precio) }))
-    .filter(p =>
-      !(minPrice !== null && (p.precioNum === null || p.precioNum < minPrice)) &&
-      !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
+  results = results
+    .map(p => ({ ...p, precioNum: parsePrecio(p.precio) }))
+    .filter(
+      p =>
+        !(minPrice !== null && (p.precioNum === null || p.precioNum < minPrice)) &&
+        !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
     );
 
-  // --- BÚSQUEDA PRECISA ---
+  // --- BÚSQUEDA EXACTA (solo singular/plural) ---
   if (q) {
-    const palabrasBuscadas = q.split(/\s+/).map(normalizarPalabra).filter(Boolean);
+    const palabrasBuscadas = q
+      .split(/\s+/)
+      .map(normalizarPalabra)
+      .filter(Boolean);
 
     results = results.filter(p => {
       const texto = `${p.titulo} ${p.proveedor}`.toLowerCase();
-      const palabrasTitulo = texto.split(/[^a-z0-9áéíóúñ]+/i).map(normalizarPalabra);
+      const palabrasTitulo = texto
+        .split(/[^a-z0-9áéíóúñ]+/i)
+        .map(normalizarPalabra)
+        .filter(Boolean);
 
-      // Cada palabra buscada debe coincidir con alguna palabra del título
+      // Cada palabra buscada debe coincidir EXACTAMENTE (singular/plural) con una palabra del título
       return palabrasBuscadas.every(busq =>
-        palabrasTitulo.some(word =>
-          word === busq ||                   // coincidencia exacta
-          distanciaLevenshtein(word, busq) <= 1 // pequeño error permitido
-        )
+        palabrasTitulo.some(word => word === busq)
       );
     });
   }
 
   // --- ORDENAMIENTO ---
-  if (sort === "price_asc") results.sort((a,b)=> (a.precioNum||0)-(b.precioNum||0));
-  else if (sort === "price_desc") results.sort((a,b)=> (b.precioNum||0)-(a.precioNum||0));
+  if (sort === "price_asc") results.sort((a, b) => (a.precioNum || 0) - (b.precioNum || 0));
+  else if (sort === "price_desc") results.sort((a, b) => (b.precioNum || 0) - (a.precioNum || 0));
 
   // --- PAGINACIÓN ---
   const total = results.length;
   const start = (page - 1) * perPage;
   const end = start + perPage;
 
-  res.status(200).json({ total, page, perPage, results: results.slice(start, end) });
+  res.status(200).json({
+    total,
+    page,
+    perPage,
+    results: results.slice(start, end)
+  });
 }
