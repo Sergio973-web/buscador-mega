@@ -82,7 +82,7 @@ let perPage = 24;
 let lastQuery = "";
 let carrito = JSON.parse(localStorage.getItem("carritoMega") || "{}");
 
-// Escapar HTML para evitar errores con comillas
+// Escapar HTML
 function escapeHTML(str){ return str ? str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : ''; }
 
 function guardarCarrito(){ 
@@ -128,14 +128,18 @@ function renderCarrito(){
 }
 
 async function cargarProveedores(){
-  const res = await fetch(API_BASE + "/proveedores");
-  const provs = await res.json();
-  const sel = document.getElementById("proveedorSelect");
-  provs.forEach(p=>{
-    const o = document.createElement("option");
-    o.value=p; o.textContent=p;
-    sel.appendChild(o);
-  });
+  try{
+    const res = await fetch(API_BASE + "/proveedores");
+    const provs = await res.json();
+    const sel = document.getElementById("proveedorSelect");
+    provs.forEach(p=>{
+      const o = document.createElement("option");
+      o.value=p; o.textContent=p;
+      sel.appendChild(o);
+    });
+  }catch(err){
+    console.error("Error cargando proveedores:",err);
+  }
 }
 
 async function buscar(resetPage = true){
@@ -157,44 +161,49 @@ async function buscar(resetPage = true){
   params.set("perPage",perPage);
 
   document.getElementById("stats").textContent="🔎 Buscando...";
-  const res = await fetch(API_BASE+"/buscar?"+params.toString());
-  const data = await res.json();
+  try{
+    const res = await fetch(API_BASE+"/buscar?"+params.toString());
+    const data = await res.json();
 
-  const cont = document.getElementById("resultados");
-  cont.innerHTML="";
-  document.getElementById("stats").textContent=`Resultados: ${data.total} — Página ${data.page}`;
+    const cont = document.getElementById("resultados");
+    cont.innerHTML="";
+    document.getElementById("stats").textContent=`Resultados: ${data.total} — Página ${data.page}`;
 
-  data.results.forEach(item=>{
-    const div = document.createElement("div");
-    div.className="card";
-    div.innerHTML=`
-      <div class="thumb"><img src="${escapeHTML(item.imagen)||'https://via.placeholder.com/300x300?text=No+Image'}"></div>
-      <div class="meta">
-        <div class="title">${escapeHTML(item.titulo)}</div>
-        <div class="price">${escapeHTML(item.precio)||""}</div>
-        <div class="small">Proveedor: <span class="provider">${escapeHTML(item.proveedor)}</span></div>
-        <div class="footer-actions">
-          <a class="btn" href="${escapeHTML(item.url)}" target="_blank">Ir al producto</a>
-          <button class="btn addCartBtn">Agregar al carrito</button>
-          <div class="small" style="margin-left:auto">Score: ${(item.score===undefined)?"-":item.score.toFixed(3)}</div>
+    data.results.forEach(item=>{
+      const div = document.createElement("div");
+      div.className="card";
+      div.innerHTML=`
+        <div class="thumb"><img src="${escapeHTML(item.imagen)||'https://via.placeholder.com/300x300?text=No+Image'}"></div>
+        <div class="meta">
+          <div class="title">${escapeHTML(item.titulo)}</div>
+          <div class="price">${escapeHTML(item.precio)||""}</div>
+          <div class="small">Proveedor: <span class="provider">${escapeHTML(item.proveedor)}</span></div>
+          <div class="footer-actions">
+            <a class="btn" href="${escapeHTML(item.url)}" target="_blank">Ir al producto</a>
+            <button class="btn addCartBtn">Agregar al carrito</button>
+            <div class="small" style="margin-left:auto">Score: ${(item.score===undefined)?"-":item.score.toFixed(3)}</div>
+          </div>
         </div>
-      </div>
-    `;
-    cont.appendChild(div);
+      `;
+      cont.appendChild(div);
 
-    div.querySelector(".addCartBtn").addEventListener("click", ()=>{
-      if(!carrito[item.proveedor]) carrito[item.proveedor]=[];
-      carrito[item.proveedor].push({
-        titulo:item.titulo,
-        precio:item.precio,
-        imagen:item.imagen,
-        url:item.url
+      div.querySelector(".addCartBtn").addEventListener("click", ()=>{
+        if(!carrito[item.proveedor]) carrito[item.proveedor]=[];
+        carrito[item.proveedor].push({
+          titulo:item.titulo,
+          precio:item.precio,
+          imagen:item.imagen,
+          url:item.url
+        });
+        guardarCarrito();
       });
-      guardarCarrito();
     });
-  });
 
-  document.getElementById("pageInfo").textContent=`Página ${data.page} / ${Math.ceil(data.total/data.perPage)||1}`;
+    document.getElementById("pageInfo").textContent=`Página ${data.page} / ${Math.ceil(data.total/data.perPage)||1}`;
+  }catch(err){
+    console.error("Error buscando productos:",err);
+    document.getElementById("stats").textContent="❌ Error al buscar productos";
+  }
 }
 
 document.getElementById("buscarBtn").addEventListener("click", ()=>buscar(true));
@@ -203,9 +212,7 @@ document.getElementById("prevBtn").addEventListener("click", ()=>{ if(page>1){ p
 document.getElementById("nextBtn").addEventListener("click", ()=>{ page++; buscar(false);} );
 
 // toggle carrito
-document.getElementById("toggleCart").addEventListener("click", ()=>{
-  document.getElementById("carrito").classList.toggle("open");
-});
+document.getElementById("toggleCart").addEventListener("click", ()=>{ document.getElementById("carrito").classList.toggle("open"); });
 
 (async ()=>{
   await cargarProveedores();
