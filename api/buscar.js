@@ -10,26 +10,28 @@ function parsePrecio(precioStr) {
   return isFinite(n) ? n : null;
 }
 
-// --- Normalizaciones (spandoks) ---
+// --- Normalizaciones y singular/plural simplificado ---
 const normalizaciones = {
   "aroos": "aros",
   "runass": "runas",
   "taroot": "tarot",
-  "tiger": "tigre",
-  "ojo-tigre": "ojo de tigre"
+  "tigre": "tigre",
+  "ojotigre": "ojo de tigre"
 };
 
-function normalizar(query) {
-  const q = query.toLowerCase().trim();
-  return normalizaciones[q] || q;
+function normalizarPalabra(word) {
+  word = word.toLowerCase().trim();
+  if (normalizaciones[word]) return normalizaciones[word];
+  // quitar plural simple: aros → aro, piedras → piedra
+  if (word.endsWith("s") && word.length > 3) return word.slice(0, -1);
+  return word;
 }
 
-// --- Distancia Levenshtein ---
+// --- Distancia Levenshtein mínima ---
 function distanciaLevenshtein(a, b) {
   const m = [];
   for (let i = 0; i <= b.length; i++) m[i] = [i];
   for (let j = 0; j <= a.length; j++) m[0][j] = j;
-
   for (let i = 1; i <= b.length; i++) {
     for (let j = 1; j <= a.length; j++) {
       m[i][j] = b[i - 1] === a[j - 1]
@@ -40,11 +42,9 @@ function distanciaLevenshtein(a, b) {
   return m[b.length][a.length];
 }
 
-// --- HANDLER COMPLETO ---
+// --- Handler principal ---
 export default function handler(req, res) {
   let q = (req.query.q || "").trim();
-  q = normalizar(q);
-
   const minPrice = req.query.minPrice ? parseFloat(req.query.minPrice) : null;
   const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice) : null;
   const proveedorQ = req.query.proveedor
@@ -68,23 +68,19 @@ export default function handler(req, res) {
       !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
     );
 
-  // --- BÚSQUEDA AVANZADA ---
+  // --- BÚSQUEDA PRECISA ---
   if (q) {
-    const palabrasBuscadas = q
-      .toLowerCase()
-      .split(/\s+/)
-      .map(w => normalizaciones[w] || w)
-      .filter(Boolean);
+    const palabrasBuscadas = q.split(/\s+/).map(normalizarPalabra).filter(Boolean);
 
     results = results.filter(p => {
       const texto = `${p.titulo} ${p.proveedor}`.toLowerCase();
-      const palabrasTitulo = texto.split(/[^a-z0-9áéíóúñ]+/i); // tokenizador real
+      const palabrasTitulo = texto.split(/[^a-z0-9áéíóúñ]+/i).map(normalizarPalabra);
 
       // Cada palabra buscada debe coincidir con alguna palabra del título
       return palabrasBuscadas.every(busq =>
         palabrasTitulo.some(word =>
-          word === busq ||                       // coincidencia exacta
-          distanciaLevenshtein(word, busq) <= 1 // errores pequeños
+          word === busq ||                   // coincidencia exacta
+          distanciaLevenshtein(word, busq) <= 1 // pequeño error permitido
         )
       );
     });
