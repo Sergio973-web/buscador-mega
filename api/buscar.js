@@ -32,8 +32,21 @@ export default function handler(req, res) {
 
   // Buscar texto
   if (q) {
-    const fuse = new Fuse(results, { keys: ["titulo", "proveedor"], threshold: 0.05 });
-    results = fuse.search(q, { limit: 1000 }).map(r => ({ ...r.item, score: r.score }));
+    // Crear Fuse con opciones estrictas
+    const fuse = new Fuse(results, { 
+        keys: ["titulo", "proveedor"], 
+        threshold: 0.1,       // coincidencias estrictas, pero aún permite variantes pequeñas
+        ignoreLocation: true, 
+        includeScore: true    // para poder filtrar por score
+    });
+
+    // Buscar
+    let searchResults = fuse.search(q, { limit: 1000 });
+
+    // Filtrar resultados muy poco relevantes
+    results = searchResults
+        .filter(r => r.score <= 0.15)   // solo resultados con score menor a 0.15
+        .map(r => ({ ...r.item, score: r.score }));
 
     if (sort === "price_asc") results.sort((a, b) => (a.precioNum || 0) - (b.precioNum || 0));
     else if (sort === "price_desc") results.sort((a, b) => (b.precioNum || 0) - (a.precioNum || 0));
