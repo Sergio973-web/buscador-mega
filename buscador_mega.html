@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buscador Ultra — Multi-proveedor</title>
+<style>
+  :root{--accent:#0b76f4;--muted:#666}
+  body{font-family:Inter,Arial,Helvetica,sans-serif;margin:0;background:#f5f7fb;color:#222}
+  header{background:#fff;padding:18px 24px;box-shadow:0 2px 6px rgba(12,20,30,.06);display:flex;gap:12px;align-items:center}
+  header h1{margin:0;font-size:18px}
+  .searchbar{flex:1;display:flex;gap:8px}
+  input[type="search"]{flex:1;padding:12px 14px;border-radius:10px;border:1px solid #e2e8f0;font-size:16px}
+  select,input[type="number"]{padding:10px;border-radius:8px;border:1px solid #e2e8f0}
+  .controls{display:flex;gap:8px;align-items:center}
+  main{padding:18px 24px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .card{background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(12,20,30,.06);display:flex;gap:12px;align-items:flex-start}
+  .thumb{width:120px;height:120px;flex:0 0 120px;border-radius:8px;overflow:hidden;background:#f0f0f0;display:flex;align-items:center;justify-content:center}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .meta{flex:1}
+  .title{font-weight:700;margin-bottom:6px}
+  .price{color:var(--accent);font-weight:700;margin-bottom:8px}
+  .provider{background:#eef5ff;color:var(--accent);padding:4px 8px;border-radius:999px;font-size:12px;display:inline-block}
+  .footer-actions{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .btn{background:var(--accent);color:white;padding:8px 10px;border-radius:8px;text-decoration:none}
+  .small{font-size:13px;color:var(--muted)}
+  .pager{margin-top:18px;display:flex;gap:8px;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Buscador Ultra — Multi-proveedor</h1>
+
+  <div class="searchbar">
+    <input id="q" type="search" placeholder="Buscar producto (ej: 'anillo cuarzo rosa')">
+    <div class="controls">
+      <select id="proveedorSelect"><option value="">Todos los proveedores</option></select>
+      <input id="minPrice" type="number" placeholder="Min $" style="width:100px">
+      <input id="maxPrice" type="number" placeholder="Max $" style="width:100px">
+      <select id="sort"><option value="relevance">Más relevante</option><option value="price_asc">Precio ↑</option><option value="price_desc">Precio ↓</option></select>
+      <button id="buscarBtn" class="btn">Buscar</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="stats" class="small" style="margin-bottom:10px"></div>
+  <div id="resultados" class="grid"></div>
+  <div class="pager">
+    <button id="prevBtn">Anterior</button>
+    <div id="pageInfo"></div>
+    <button id="nextBtn">Siguiente</button>
+  </div>
+</main>
+
+<script>
+const API_BASE = "/api";
+let page = 1;
+let perPage = 24;
+let lastQuery = "";
+
+async function cargarProveedores(){
+  const res = await fetch(API_BASE + "/proveedores");
+  const provs = await res.json();
+  const sel = document.getElementById("proveedorSelect");
+  provs.forEach(p=>{
+    const o = document.createElement("option");
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+}
+
+async function buscar(resetPage = true){
+  if (resetPage) page = 1;
+  const q = document.getElementById("q").value.trim();
+  lastQuery = q;
+  const proveedor = document.getElementById("proveedorSelect").value;
+  const minPrice = document.getElementById("minPrice").value;
+  const maxPrice = document.getElementById("maxPrice").value;
+  const sort = document.getElementById("sort").value;
+
+  const params = new URLSearchParams();
+  if(q) params.set("q", q);
+  if(proveedor) params.set("proveedor", proveedor);
+  if(minPrice) params.set("minPrice", minPrice);
+  if(maxPrice) params.set("maxPrice", maxPrice);
+  if(sort) params.set("sort", sort);
+  params.set("page", page);
+  params.set("perPage", perPage);
+
+  document.getElementById("stats").textContent = "🔎 Buscando...";
+  const res = await fetch(API_BASE + "/buscar?" + params.toString());
+  const data = await res.json();
+
+  const cont = document.getElementById("resultados");
+  cont.innerHTML = "";
+  document.getElementById("stats").textContent = `Resultados: ${data.total} — Página ${data.page}`;
+
+  data.results.forEach(item => {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <div class="thumb"><img src="${item.imagen || 'https://via.placeholder.com/300x300?text=No+Image'}" alt=""></div>
+      <div class="meta">
+        <div class="title">${item.titulo}</div>
+        <div class="price">${item.precio || ""}</div>
+        <div class="small">Proveedor: <span class="provider">${item.proveedor}</span></div>
+        <div class="footer-actions">
+          <a class="btn" href="${item.url}" target="_blank">Ir al producto</a>
+          <div class="small" style="margin-left:auto">Score: ${ (item.score===undefined) ? "-" : (item.score.toFixed(3)) }</div>
+        </div>
+      </div>
+    `;
+    cont.appendChild(div);
+  });
+
+  document.getElementById("pageInfo").textContent = `Página ${data.page} / ${Math.ceil(data.total / data.perPage) || 1}`;
+}
+
+document.getElementById("buscarBtn").addEventListener("click", ()=>buscar(true));
+document.getElementById("q").addEventListener("keydown", e=>{ if(e.key==='Enter') buscar(true); });
+document.getElementById("prevBtn").addEventListener("click", ()=>{ if(page>1){ page--; buscar(false);} });
+document.getElementById("nextBtn").addEventListener("click", ()=>{ page++; buscar(false); });
+
+(async ()=> {
+  await cargarProveedores();
+  // búsqueda inicial: vacía (muestra todo ordenado por precio)
+  buscar(true);
+})();
+</script>
+
+</body>
+</html>
