@@ -21,6 +21,21 @@ function normalizar(query) {
   return normalizaciones[q] || q;
 }
 
+function distanciaLevenshtein(a, b) {
+  const m = [];
+  for (let i = 0; i <= b.length; i++) m[i] = [i];
+  for (let j = 0; j <= a.length; j++) m[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      m[i][j] = b[i - 1] === a[j - 1]
+        ? m[i - 1][j - 1]
+        : 1 + Math.min(m[i - 1][j], m[i][j - 1], m[i - 1][j - 1]);
+    }
+  }
+  return m[b.length][a.length];
+}
+
 export default function handler(req, res) {
   let q = (req.query.q || "").trim();
   q = normalizar(q);  // aplicar normalización
@@ -46,19 +61,30 @@ export default function handler(req, res) {
 
   // --- BÚSQUEDA AVANZADA ---
   if (q) {
-    // Normalizar y dividir en palabras
-    const palabras = q
+    const palabrasBuscadas = q
       .toLowerCase()
       .split(/\s+/)
-      .map(p => normalizaciones[p] || p)  // corregir cada palabra
+      .map(w => normalizaciones[w] || w)
       .filter(Boolean);
 
     results = results.filter(p => {
       const texto = `${p.titulo} ${p.proveedor}`.toLowerCase();
+      const palabrasTitulo = texto.split(/[^a-z0-9áéíóúñ]+/i); // palabras reales del título
 
-      // Cada palabra debe existir en el texto, sin importar el orden
-      return palabras.every(palabra => texto.includes(palabra));
+      // Cada palabra buscada debe coincidir con alguna del título
+      return palabrasBuscadas.every(busq =>
+        palabrasTitulo.some(word =>
+          word === busq ||          // coincidencia exacta
+          word.startsWith(busq) ||  // palabra comienza igual ("aro" → "aros")
+          distanciaLevenshtein(word, busq) <= 1 // permitir errores pequeños
+        )
+      );
     });
+
+    if (sort === "price_asc") results.sort((a,b)=> (a.precioNum||0)-(b.precioNum||0));
+    else if (sort === "price_desc") results.sort((a,b)=> (b.precioNum||0)-(a.precioNum||0));
+  }
+
 
     // Ordenamiento
     if (sort === "price_asc") results.sort((a,b)=> (a.precioNum||0)-(b.precioNum||0));
