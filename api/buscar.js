@@ -46,11 +46,13 @@ export default function handler(req, res) {
 
   // Búsqueda estricta con normalización
   if (q) {
-    const qLower = q.toLowerCase();
-    results = results.filter(p =>
-      p.titulo.toLowerCase().includes(qLower) ||
-      p.proveedor.toLowerCase().includes(qLower)
-    );
+    const palabras = q.toLowerCase().split(/\s+/); // dividir la query en palabras
+    results = results.filter(p => {
+      const titulo = p.titulo.toLowerCase();
+      const proveedor = p.proveedor.toLowerCase();
+      // cada palabra debe aparecer en el título o proveedor
+      return palabras.every(palabra => titulo.includes(palabra) || proveedor.includes(palabra));
+    });
 
     if (sort === "price_asc") results.sort((a,b)=> (a.precioNum||0)-(b.precioNum||0));
     else if (sort === "price_desc") results.sort((a,b)=> (b.precioNum||0)-(a.precioNum||0));
