@@ -1,5 +1,4 @@
 import productos from "../productos.json";
-import Fuse from "fuse.js";
 
 // Convierte precio a número
 function parsePrecio(precioStr) {
@@ -9,8 +8,23 @@ function parsePrecio(precioStr) {
   return isFinite(n) ? n : null;
 }
 
+// Mapa de sinónimos o correcciones
+const normalizaciones = {
+  "aroos": "aros",
+  "runass": "runas",
+  "taroot": "tarot",
+  // agrega las excepciones que quieras
+};
+
+function normalizar(query) {
+  const q = query.toLowerCase().trim();
+  return normalizaciones[q] || q;
+}
+
 export default function handler(req, res) {
-  const q = (req.query.q || "").trim();
+  let q = (req.query.q || "").trim();
+  q = normalizar(q);  // aplicar normalización
+
   const minPrice = req.query.minPrice ? parseFloat(req.query.minPrice) : null;
   const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice) : null;
   const proveedorQ = req.query.proveedor ? String(req.query.proveedor).split(",").map(s => s.trim()).filter(Boolean) : [];
@@ -30,7 +44,7 @@ export default function handler(req, res) {
     .filter(p => !(minPrice !== null && (p.precioNum === null || p.precioNum < minPrice)) &&
                  !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice)));
 
-  // Buscar texto
+  // Búsqueda estricta con normalización
   if (q) {
     const qLower = q.toLowerCase();
     results = results.filter(p =>
