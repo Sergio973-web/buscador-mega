@@ -1,1 +1,10 @@
-.vercel
+# Ignorar todo por defecto
+*
+
+# Pero incluir estos archivos y carpetas
+!.gitignore
+!index.html
+!productos.json
+!api/
+!api/*
+!package.json
