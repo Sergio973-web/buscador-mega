@@ -54,6 +54,8 @@ main{padding:18px 24px}
       <input id="maxPrice" type="number" placeholder="Max $" style="width:100px">
       <select id="sort"><option value="relevance">Más relevante</option><option value="price_asc">Precio ↑</option><option value="price_desc">Precio ↓</option></select>
       <button id="buscarBtn" class="btn">Buscar</button>
+      <input id="imageSearch" type="file" accept="image/*">
+
     </div>
   </div>
 </header>
@@ -219,6 +221,80 @@ document.getElementById("toggleCart").addEventListener("click", ()=>{ document.g
   buscar(true);
   renderCarrito();
 })();
+
+let productos = [];
+
+fetch('/productos.json')
+  .then(res => res.json())
+  .then(data => productos = data);
+
+// convertir imagen a datos
+function getImageData(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous"; 
+    img.src = url;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, 64, 64);
+      const data = ctx.getImageData(0, 0, 64, 64).data;
+      resolve(data);
+    };
+    img.onerror = reject;
+  });
+}
+
+// comparar dos imágenes
+function compareImages(data1, data2) {
+  let diff = 0;
+  for (let i = 0; i < data1.length; i += 4) {
+    diff += Math.abs(data1[i] - data2[i]);
+    diff += Math.abs(data1[i+1] - data2[i+1]);
+    diff += Math.abs(data1[i+2] - data2[i+2]);
+  }
+  return diff / (data1.length / 4);
+}
+
+// buscar por imagen
+async function buscarPorImagen(file) {
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const imgUser = new Image();
+    imgUser.src = reader.result;
+    imgUser.onload = async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(imgUser, 0, 0, 64, 64);
+      const userData = ctx.getImageData(0, 0, 64, 64).data;
+
+      const resultados = [];
+      for (const prod of productos) {
+        if(!prod.imagen) continue;
+        try {
+          const prodData = await getImageData(prod.imagen);
+          const score = compareImages(userData, prodData);
+          resultados.push({...prod, score});
+        } catch(e){ console.warn("No se pudo cargar imagen", prod.imagen); }
+      }
+
+      // ordenar por similitud
+      resultados.sort((a,b)=> a.score - b.score);
+      renderResultados({results: resultados.slice(0, 24), total: resultados.length, page: 1, perPage: 24});
+    };
+  };
+  reader.readAsDataURL(file);
+}
+
+document.getElementById("imageSearch").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if(file) buscarPorImagen(file);
+});
+
 </script>
 
 </body>
