@@ -6,8 +6,7 @@ node_modules/
 *.tmp
 *.bak
 
-# Ignorar bases y datasets
-productos.json
+# Ignorar bases y datasets (pero permitir productos.json)
 Imagenes_productos_proveedores/
 bases/
 
@@ -29,3 +28,4 @@ check_proveedores.js
 !utils/
 !package.json
 !package-lock.json
+!productos.json
