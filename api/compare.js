@@ -1,6 +1,6 @@
 import formidable from "formidable";
 import fs from "fs";
-import { buscarImagenSimilar } from "../../utils/compareImages";
+import { buscarImagenSimilar } from "./utils/compareImages";
 
 export const config = {
   api: {
