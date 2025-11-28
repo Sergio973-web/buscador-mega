@@ -10,6 +10,7 @@
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "deasync": "^0.1.31",
+    "formidable": "^3.5.4",
     "fuse.js": "^7.1.0",
     "sqlite3": "^5.1.7"
   },
