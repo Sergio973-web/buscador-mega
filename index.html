@@ -54,7 +54,9 @@ main{padding:18px 24px}
       <input id="maxPrice" type="number" placeholder="Max $" style="width:100px">
       <select id="sort"><option value="relevance">Más relevante</option><option value="price_asc">Precio ↑</option><option value="price_desc">Precio ↓</option></select>
       <button id="buscarBtn" class="btn">Buscar</button>
-      
+      <input type="file" id="imagenInput" accept="image/*">
+      <button id="buscarSimilar">Buscar producto similar</button>
+
     </div>
   </div>
 </header>
@@ -220,6 +222,38 @@ document.getElementById("toggleCart").addEventListener("click", ()=>{ document.g
   buscar(true);
   renderCarrito();
 })();
+
+document.getElementById("buscarSimilar").onclick = async () => {
+  const file = document.getElementById("imagenInput").files[0];
+  if (!file) return alert("Selecciona una imagen");
+
+  // convertir archivo → base64
+  const reader = new FileReader();
+  reader.onloadend = async () => {
+    const base64 = reader.result;
+
+    // 1) SUBIR IMAGEN
+    const uploadRes = await fetch("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: base64 }),
+    }).then(r => r.json());
+
+    console.log("Imagen subida:", uploadRes.url);
+
+    // 2) COMPARAR
+    const compareRes = await fetch("/api/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: uploadRes.url }),
+    }).then(r => r.json());
+
+    console.log("Resultados:", compareRes.resultados);
+  };
+
+  reader.readAsDataURL(file);
+};
+
 </script>
 
 </body>
