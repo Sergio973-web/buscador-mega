@@ -225,30 +225,50 @@ document.getElementById("toggleCart").addEventListener("click", ()=>{ document.g
 
 document.getElementById("buscarSimilar").onclick = async () => {
   const file = document.getElementById("imagenInput").files[0];
-  if (!file) return alert("Selecciona una imagen");
+  const resultadosDiv = document.getElementById("resultados-img");
+  resultadosDiv.innerHTML = "Procesando…";
 
-  // convertir archivo → base64
+  if (!file) {
+    resultadosDiv.innerHTML = "Selecciona una imagen primero";
+    return;
+  }
+
   const reader = new FileReader();
   reader.onloadend = async () => {
     const base64 = reader.result;
 
-    // 1) SUBIR IMAGEN
-    const uploadRes = await fetch("/api/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: base64 }),
-    }).then(r => r.json());
+    try {
+      // 1) Subir imagen
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+      }).then(r => r.json());
 
-    console.log("Imagen subida:", uploadRes.url);
+      resultadosDiv.innerHTML = "Imagen subida, buscando similares…";
 
-    // 2) COMPARAR
-    const compareRes = await fetch("/api/compare", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: uploadRes.url }),
-    }).then(r => r.json());
+      // 2) Buscar coincidencias
+      const compareRes = await fetch("/api/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: uploadRes.url }),
+      }).then(r => r.json());
 
-    console.log("Resultados:", compareRes.resultados);
+      if (!compareRes.resultados || compareRes.resultados.length === 0) {
+        resultadosDiv.innerHTML = "No se encontraron productos similares";
+      } else {
+        resultadosDiv.innerHTML = compareRes.resultados.map(p =>
+          `<div style="margin:10px;">
+             <img src="${p.imagen[0]}" width="150">
+             <p>${p.titulo}</p>
+           </div>`
+        ).join("");
+      }
+
+    } catch (err) {
+      console.error(err);
+      resultadosDiv.innerHTML = "Ocurrió un error. Revisá la consola.";
+    }
   };
 
   reader.readAsDataURL(file);

@@ -7,17 +7,13 @@ cloudinary.config({
 });
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método no permitido' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
   try {
     const { image } = req.body;
+    if (!image) return res.status(400).json({ error: 'No se recibió imagen' });
 
-    if (!image) {
-      return res.status(400).json({ error: 'No se recibió imagen' });
-    }
-
+    // subimos Base64 a Cloudinary
     const uploadResponse = await cloudinary.uploader.upload(image, {
       folder: 'buscador-mega',
     });
@@ -29,6 +25,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error al subir imagen:', error);
-    res.status(500).json({ error: 'Error al subir imagen', details: error });
+    res.status(500).json({ error: 'Error al subir imagen', details: error.message });
   }
 }
