@@ -22,10 +22,12 @@ check_proveedores.js
 .vscode/
 .env
 
-# PERMITIR lo que sí queremos subir
+# PERMITIR SOLO LO NECESARIO
 !index.html
 !api/
+!api/**
 !utils/
+!utils/**
+!productos.json
 !package.json
 !package-lock.json
-!productos.json
