@@ -1,10 +1,31 @@
-# Ignorar todo por defecto
-*
+# Ignorar node_modules
+node_modules/
 
-# Pero incluir estos archivos y carpetas
-!.gitignore
+# Ignorar archivos grandes o temporales
+*.log
+*.tmp
+*.bak
+
+# Ignorar bases y datasets
+productos.json
+Imagenes_productos_proveedores/
+bases/
+
+# Ignorar scripts que no van a Vercel
+descargar_imagenes.js
+exportar_base_datos_a_json.js
+listar_tablas.js
+generarProductos.js
+servidor_mega.js
+check_proveedores.js
+
+# Ignorar carpetas de desarrollo
+.vscode/
+.env
+
+# PERMITIR lo que sí queremos subir
 !index.html
-!productos.json
 !api/
-!api/*
+!utils/
 !package.json
+!package-lock.json
