@@ -1,6 +1,6 @@
 import formidable from "formidable";
 import fs from "fs";
-import { buscarImagenSimilar } from "./utils/compareImages";
+import { buscarImagenSimilar } from "./utils/compareImages.js"; // ojo con la extensión .js
 
 export const config = {
   api: {
@@ -14,7 +14,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const form = new formidable.IncomingForm();
+    // Crear el form con la nueva API de formidable
+    const form = formidable({ multiples: false });
 
     form.parse(req, async (err, fields, files) => {
       if (err) {
@@ -22,15 +23,15 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Error al procesar archivo" });
       }
 
-      const archivo = files.file; // esto depende del nombre que pongas en el frontend
+      const archivo = files.file; // depende del name en tu frontend
       if (!archivo) {
         return res.status(400).json({ error: "No se subió ningún archivo" });
       }
 
-      // Leemos el archivo como buffer
+      // Leer el archivo como buffer
       const buffer = fs.readFileSync(archivo.filepath);
 
-      // Pasamos el buffer a la función que compara imágenes
+      // Pasar el buffer a la función que compara imágenes
       const resultados = await buscarImagenSimilar(buffer);
 
       res.status(200).json({ resultados: resultados || [] });
