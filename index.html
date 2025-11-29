@@ -237,8 +237,7 @@ document.getElementById("buscarSimilar").onclick = async () => {
 
   try {
     const formData = new FormData();
-    formData.append("file", file); // el mismo nombre que espera el backend
-
+    formData.append("imagen", file);
     const compareRes = await fetch("/api/compare", {
       method: "POST",
       body: formData
