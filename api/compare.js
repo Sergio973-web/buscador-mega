@@ -1,10 +1,17 @@
 import formidable from "formidable";
 import fs from "fs";
-import { buscarImagenSimilar } from "./utils/compareImages.js"; // ojo con la extensión .js
+import { v2 as cloudinary } from "cloudinary";
+
+// Configuración de Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export const config = {
   api: {
-    bodyParser: false, // importante para poder manejar archivos
+    bodyParser: false, // importante para recibir archivos
   },
 };
 
@@ -13,44 +20,34 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Método no permitido" });
   }
 
-  try {
-    // Crear el form
-    const form = formidable({ multiples: false });
+  const form = new formidable();
 
-    form.parse(req, async (err, fields, files) => {
-      if (err) {
-        console.error("Error al parsear FormData:", err);
-        return res.status(500).json({ error: "Error al procesar archivo", details: err.message });
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      return res.status(500).json({ error: "Error al parsear el formulario" });
+    }
+
+    try {
+      // files.imagen es el input que envías desde el frontend
+      const file = files.imagen;
+      if (!file) {
+        return res.status(400).json({ error: "No se envió ningún archivo" });
       }
 
-      // Validar que exista el archivo
-      if (!files.file || files.file.length === 0) {
-        return res.status(400).json({ error: "No se subió ningún archivo" });
-      }
+      // Subida a Cloudinary
+      const uploaded = await cloudinary.uploader.upload(file.filepath, {
+        folder: "imagenes_subidas", // puedes cambiar la carpeta
+      });
 
-      // Tomar el primer archivo del array
-      const archivo = files.file[0];
-
-      // Obtener la ruta del archivo
-      const ruta = archivo.filepath || archivo.path;
-      if (!ruta) {
-        return res.status(500).json({ error: "No se pudo determinar la ruta del archivo" });
-      }
-
-      // Leer el archivo como buffer
-      const buffer = fs.readFileSync(ruta);
-
-      // Pasar el buffer a la función que compara imágenes
-      const resultados = await buscarImagenSimilar(buffer);
-
-      res.status(200).json({ resultados: resultados || [] });
-    });
-  } catch (error) {
-    console.error("Error en /api/compare:", error);
-    res.status(500).json({
-      error: "Error al buscar imágenes similares",
-      message: error.message,
-      stack: error.stack,
-    });
-  }
+      // Retornar info de la imagen subida
+      res.status(200).json({ 
+        success: true, 
+        public_id: uploaded.public_id, 
+        url: uploaded.secure_url 
+      });
+    } catch (error) {
+      console.error("Error subiendo a Cloudinary:", error);
+      res.status(500).json({ error: "Error subiendo la imagen" });
+    }
+  });
 }
