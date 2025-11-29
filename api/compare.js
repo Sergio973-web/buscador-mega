@@ -1,14 +1,12 @@
 import formidable from "formidable";
 import { v2 as cloudinary } from "cloudinary";
 
-// ⛔ NECESARIO para que formidable funcione en Vercel
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// 🔧 Configurar Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -32,21 +30,25 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Error parseando el formulario" });
       }
 
-      // 📸 El archivo TIENE QUE ESTAR en files.imagen
-      const file = files.imagen;
+      let file = files.imagen;
 
-      if (!file) {
-        return res.status(400).json({ error: "No se envió la imagen" });
+      // 📌 Si viene como array, tomar el primer elemento
+      if (Array.isArray(file)) {
+        file = file[0];
       }
 
-      console.log("Archivo recibido por formidable:", file);
+      if (!file) {
+        return res.status(400).json({ error: "No se recibió el archivo" });
+      }
 
-      // 📤 SUBIR A CLOUDINARY
+      console.log("➡ Archivo listo para subir:", file.filepath);
+
+      // 📤 Subir a Cloudinary
       const upload = await cloudinary.uploader.upload(file.filepath, {
         folder: "comparador",
       });
 
-      console.log("Subida exitosa:", upload.secure_url);
+      console.log("✔ Imagen subida:", upload.secure_url);
 
       return res.json({
         message: "Imagen subida correctamente",
@@ -55,7 +57,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error("Error general:", error);
+    console.error("❌ Error general:", error);
     return res.status(500).json({
       error: "Error procesando la imagen",
       details: error.message,
