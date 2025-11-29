@@ -1,6 +1,7 @@
 // utils/compareImages.js
 import { v2 as cloudinary } from "cloudinary";
-import productos from "../productos.json";
+import productos from '../../productos.json';
+
 import fs from "fs";
 
 // Configuración de Cloudinary
