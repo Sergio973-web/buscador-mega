@@ -1,52 +1,47 @@
-// utils/compareImages.js
 import { v2 as cloudinary } from "cloudinary";
-import productos from '../../productos.json';
 
-import fs from "fs";
+// IMPORTAR productos.json DESDE DONDE VOS YA LO TENÍAS FUNCIONANDO
+import productos from "../../productos.json";
 
-// Configuración de Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-/**
- * Buscar imágenes similares
- * @param {string} input - Puede ser URL de internet o path local de archivo
- * @returns {Array} coincidencias
- */
-export async function buscarImagenSimilar(input) {
+// Buscar imágenes similares en Cloudinary y comparar con productos.json
+export async function buscarImagenSimilar(urlImagenSubida) {
   try {
-    let urlCloudinary = input;
+    console.log("🔎 Buscando similitudes en Cloudinary para:", urlImagenSubida);
 
-    // Si es un archivo local, subirlo a Cloudinary primero
-    if (fs.existsSync(input)) {
-      const uploadResult = await cloudinary.uploader.upload(input, {
-        folder: "temp", // Carpeta temporal
-        use_filename: true,
-        unique_filename: true,
-      });
-      urlCloudinary = uploadResult.secure_url;
-    }
-
-    // Buscar imágenes similares
-    const result = await cloudinary.search
-      .expression(`similar:${urlCloudinary}`)
+    const resultado = await cloudinary.search
+      .expression(`similar:${urlImagenSubida}`)
       .sort_by("similarity", "desc")
-      .max_results(5)
+      .max_results(10)
       .execute();
 
-    // Filtrar productos que coincidan
-    const coincidencias = productos.filter((prod) =>
-      result.resources.some(
-        (sim) => prod.imagen && prod.imagen.includes(sim.public_id)
-      )
+    console.log("📸 Cantidad de imágenes similares encontradas:", resultado.resources.length);
+
+    // Comparar productos.json con los resultados de Cloudinary
+    const coincidencias = productos.filter((producto) =>
+      resultado.resources.some((sim) => {
+        return producto.imagen && producto.imagen.includes(sim.public_id);
+      })
     );
 
-    return coincidencias;
+    console.log("🟢 Coincidencias encontradas en productos.json:", coincidencias.length);
+
+    return {
+      similaresCloudinary: resultado.resources,
+      coincidenciasProductos: coincidencias,
+    };
+
   } catch (error) {
-    console.error("Error comparando imágenes:", error);
-    return [];
+    console.error("❌ Error en buscarImagenSimilar:", error);
+    return {
+      similaresCloudinary: [],
+      coincidenciasProductos: [],
+      error: error.message,
+    };
   }
 }
