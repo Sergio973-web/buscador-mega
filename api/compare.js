@@ -1,29 +1,56 @@
 import formidable from "formidable";
 import fs from "fs";
-import { buscarImagenSimilar } from "./utils/compareImages.js";
+import { buscarImagenSimilar } from "./utils/compareImages.js"; // ojo con la extensión .js
 
 export const config = {
-  api: { bodyParser: false },
+  api: {
+    bodyParser: false, // importante para poder manejar archivos
+  },
 };
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Método no permitido" });
+  }
 
-  const form = formidable({ multiples: false });
+  try {
+    // Crear el form
+    const form = formidable({ multiples: false });
 
-  form.parse(req, async (err, fields, files) => {
-    if (err) return res.status(500).json({ error: "Error al procesar archivo", details: err.message });
+    form.parse(req, async (err, fields, files) => {
+      if (err) {
+        console.error("Error al parsear FormData:", err);
+        return res.status(500).json({ error: "Error al procesar archivo", details: err.message });
+      }
 
-    const archivo = files.file;
-    console.log("Files recibidos:", files);
-    if (!archivo) return res.status(400).json({ error: "No se subió ningún archivo" });
+      // Validar que exista el archivo
+      if (!files.file || files.file.length === 0) {
+        return res.status(400).json({ error: "No se subió ningún archivo" });
+      }
 
-    const ruta = archivo.filepath || archivo.path;
-    if (!ruta) return res.status(500).json({ error: "No se pudo determinar la ruta del archivo" });
+      // Tomar el primer archivo del array
+      const archivo = files.file[0];
 
-    const buffer = fs.readFileSync(ruta);
-    const resultados = await buscarImagenSimilar(buffer);
+      // Obtener la ruta del archivo
+      const ruta = archivo.filepath || archivo.path;
+      if (!ruta) {
+        return res.status(500).json({ error: "No se pudo determinar la ruta del archivo" });
+      }
 
-    res.status(200).json({ resultados: resultados || [] });
-  });
+      // Leer el archivo como buffer
+      const buffer = fs.readFileSync(ruta);
+
+      // Pasar el buffer a la función que compara imágenes
+      const resultados = await buscarImagenSimilar(buffer);
+
+      res.status(200).json({ resultados: resultados || [] });
+    });
+  } catch (error) {
+    console.error("Error en /api/compare:", error);
+    res.status(500).json({
+      error: "Error al buscar imágenes similares",
+      message: error.message,
+      stack: error.stack,
+    });
+  }
 }
