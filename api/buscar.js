@@ -1,4 +1,4 @@
-import productos from "../productos.json";
+import productos from "../../productos.json";
 
 // --- Convierte precio a número ---
 function parsePrecio(precioStr) {
