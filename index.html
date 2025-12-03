@@ -280,15 +280,17 @@ async function enviarImagen() {
       alert("Seleccioná una imagen primero");
       return;
     }
+
     // Limpiamos el contenedor de productos normales antes de mostrar resultados
     document.getElementById("resultados").innerHTML = "";
-    
+
     const formData = new FormData();
     formData.append("imagen", fileInput.files[0]); // 🔥 NOMBRE 'imagen' PARA FORMIDABLE
 
-    const response = await fetch("/api/compare", {
-      method: "POST",
-      body: formData
+    // POR AHORA SOLO HACEMOS UN FETCH VACÍO PARA FUTURA LÓGICA
+    const response = await fetch("/api/buscarImagen", { 
+      method: "POST", 
+      body: formData 
     });
 
     if (!response.ok) {
@@ -299,10 +301,10 @@ async function enviarImagen() {
     }
 
     const data = await response.json();
-    console.log("RESULTADO:", data);
+    console.log("RESULTADO IMAGEN (dummy):", data);
 
     if (data.ok) {
-      // Mostrar resultados en tarjetas igual que los productos normales
+      // Mostrar resultados en tarjetas (mismo estilo que productos normales)
       mostrarResultadosImagen(data.resultados);
       document.getElementById("resultado").textContent = "";
     } else {
@@ -314,6 +316,20 @@ async function enviarImagen() {
     console.error("⚠ Error enviando al backend:", err);
     document.getElementById("resultado").textContent = "Error al procesar imagen";
   }
+}
+
+// Función dummy para mostrar resultados de imagen
+function mostrarResultadosImagen(resultados) {
+  const cont = document.getElementById("resultados");
+  cont.innerHTML = "";
+
+  // Por ahora solo mostramos los títulos como ejemplo
+  resultados.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "producto";
+    card.textContent = p.titulo || "Producto";
+    cont.appendChild(card);
+  });
 }
 
 </script>
