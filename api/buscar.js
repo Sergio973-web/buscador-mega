@@ -1,11 +1,10 @@
 import fs from "fs";
 import path from "path";
 
-// ✅ Resolver ruta correctamente en Vercel
-const __dirname = new URL(".", import.meta.url).pathname;
-const productosPath = path.join(__dirname, "../../productos.json");
+// ✅ Esto SIEMPRE apunta a la raíz real del proyecto en Vercel
+const productosPath = path.join(process.cwd(), "productos.json");
 
-// ✅ Cargar JSON de forma segura
+// ✅ Carga segura del JSON
 const productos = JSON.parse(
   fs.readFileSync(productosPath, "utf-8")
 );
