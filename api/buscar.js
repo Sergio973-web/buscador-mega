@@ -1,4 +1,14 @@
-import productos from "../../productos.json";
+import fs from "fs";
+import path from "path";
+
+// ✅ Resolver ruta correctamente en Vercel
+const __dirname = new URL(".", import.meta.url).pathname;
+const productosPath = path.join(__dirname, "../../productos.json");
+
+// ✅ Cargar JSON de forma segura
+const productos = JSON.parse(
+  fs.readFileSync(productosPath, "utf-8")
+);
 
 // --- Convierte precio a número ---
 function parsePrecio(precioStr) {
@@ -25,9 +35,6 @@ function normalizarPalabra(word) {
 
   if (normalizaciones[word]) return normalizaciones[word];
 
-  // Singular/plural seguro:
-  // Quita la "s" final solo si NO forma parte de palabras como "pájaros".
-  // Evita confundir "aros" con "pájaros".
   if (
     word.endsWith("s") &&
     word.length > 3 &&
@@ -69,7 +76,7 @@ export default function handler(req, res) {
         !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
     );
 
-  // --- BÚSQUEDA EXACTA (solo singular/plural) ---
+  // --- BÚSQUEDA EXACTA ---
   if (q) {
     const palabrasBuscadas = q
       .split(/\s+/)
@@ -83,7 +90,6 @@ export default function handler(req, res) {
         .map(normalizarPalabra)
         .filter(Boolean);
 
-      // Cada palabra buscada debe coincidir EXACTAMENTE (singular/plural) con una palabra del título
       return palabrasBuscadas.every(busq =>
         palabrasTitulo.some(word => word === busq)
       );
