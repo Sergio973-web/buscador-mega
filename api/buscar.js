@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import Fuse from "fuse.js";
 
 // ✅ Esto SIEMPRE apunta a la raíz real del proyecto en Vercel
 const productosPath = path.join(process.cwd(), "productos.json");
@@ -80,36 +81,31 @@ export default function handler(req, res) {
         !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
     );
 
-  // --- BÚSQUEDA INTELIGENTE ---
+  // --- BÚSQUEDA DIFUSA con Fuse.js ---
   if (q) {
+    // Filtrar stopwords y normalizar
     const palabrasBuscadas = q
       .split(/\s+/)
       .map(normalizarPalabra)
-      .filter(word => word && !stopwords.has(word));
+      .filter(word => word && !stopwords.has(word))
+      .join(" "); // Fuse puede usar string completo
 
-    results = results.map(p => {
-      const texto = `${p.titulo} ${p.proveedor}`.toLowerCase();
-      const palabrasTitulo = texto
-        .split(/[^a-z0-9áéíóúñ]+/i)
-        .map(normalizarPalabra)
-        .filter(Boolean);
-
-      // Calcular score
-      let score = 0;
-      palabrasBuscadas.forEach(busq => {
-        palabrasTitulo.forEach(word => {
-          if (word === busq) score += 10;        // coincidencia exacta
-          else if (word.includes(busq)) score += 5; // coincidencia parcial
-        });
-      });
-
-      return { ...p, score };
+    const fuse = new Fuse(results, {
+      keys: ["titulo", "proveedor"], // campos a buscar
+      includeScore: true,
+      threshold: 0.4, // 0 exacto, 1 muy flexible
+      ignoreLocation: true,
+      minMatchCharLength: 2
     });
 
-    // Filtrar productos con score > 0
-    results = results.filter(p => p.score > 0);
+    const fuseResults = fuse.search(palabrasBuscadas);
+
+    // Fuse devuelve { item, score }, score bajo = mejor
+    results = fuseResults.map(r => ({
+      ...r.item,
+      score: r.score ? 1 / r.score : 100 // convertir score para que más alto = mejor
+    }));
   } else {
-    // Si no hay búsqueda, asignar score por defecto
     results = results.map(p => ({ ...p, score: 0 }));
   }
 
