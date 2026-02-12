@@ -47,6 +47,11 @@ function normalizarPalabra(word) {
   return word;
 }
 
+// --- Palabras comunes a ignorar ---
+const stopwords = new Set([
+  "de","en","para","con","y","el","la","los","las","un","una","unos","unas"
+]);
+
 // --- Handler principal ---
 export default function handler(req, res) {
   let q = (req.query.q || "").trim();
@@ -75,29 +80,43 @@ export default function handler(req, res) {
         !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
     );
 
-  // --- BÚSQUEDA EXACTA ---
+  // --- BÚSQUEDA INTELIGENTE ---
   if (q) {
     const palabrasBuscadas = q
       .split(/\s+/)
       .map(normalizarPalabra)
-      .filter(Boolean);
+      .filter(word => word && !stopwords.has(word));
 
-    results = results.filter(p => {
+    results = results.map(p => {
       const texto = `${p.titulo} ${p.proveedor}`.toLowerCase();
       const palabrasTitulo = texto
         .split(/[^a-z0-9áéíóúñ]+/i)
         .map(normalizarPalabra)
         .filter(Boolean);
 
-      return palabrasBuscadas.every(busq =>
-        palabrasTitulo.some(word => word === busq)
-      );
+      // Calcular score
+      let score = 0;
+      palabrasBuscadas.forEach(busq => {
+        palabrasTitulo.forEach(word => {
+          if (word === busq) score += 10;        // coincidencia exacta
+          else if (word.includes(busq)) score += 5; // coincidencia parcial
+        });
+      });
+
+      return { ...p, score };
     });
+
+    // Filtrar productos con score > 0
+    results = results.filter(p => p.score > 0);
+  } else {
+    // Si no hay búsqueda, asignar score por defecto
+    results = results.map(p => ({ ...p, score: 0 }));
   }
 
   // --- ORDENAMIENTO ---
   if (sort === "price_asc") results.sort((a, b) => (a.precioNum || 0) - (b.precioNum || 0));
   else if (sort === "price_desc") results.sort((a, b) => (b.precioNum || 0) - (a.precioNum || 0));
+  else results.sort((a, b) => (b.score || 0) - (a.score || 0)); // por relevancia
 
   // --- PAGINACIÓN ---
   const total = results.length;
