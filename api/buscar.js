@@ -100,11 +100,12 @@ export default function handler(req, res) {
 
     const fuseResults = fuse.search(palabrasBuscadas);
 
-    // Fuse devuelve { item, score }, score bajo = mejor
     results = fuseResults.map(r => ({
       ...r.item,
-      score: r.score ? 1 / r.score : 100 // convertir score para que más alto = mejor
+      precioNum: parsePrecio(r.item.precio), // agrega este campo
+      score: r.score ? 1 / r.score : 100
     }));
+
   } else {
     results = results.map(p => ({ ...p, score: 0 }));
   }
