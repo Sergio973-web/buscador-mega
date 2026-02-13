@@ -15,10 +15,31 @@ input[type="search"]{flex:1;padding:12px 14px;border-radius:10px;border:1px soli
 select,input[type="number"]{padding:10px;border-radius:8px;border:1px solid #e2e8f0}
 .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 main{padding:18px 24px}
-.grid{
-  display:grid;
-  grid-template-columns:repeat(6, 1fr);
-  gap:14px;
+.grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+}
+
+/* Pantallas medianas (tablets, aprox 768px) */
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 columnas */
+  }
+}
+
+/* Pantallas pequeñas (móviles) */
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 columnas */
+  }
+}
+
+/* Pantallas muy pequeñas */
+@media (max-width: 360px) {
+  .grid {
+    grid-template-columns: 1fr; /* 1 columna */
+  }
 }
 
 .card{background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(12,20,30,.06);display:flex;gap:12px;align-items:flex-start;flex-direction:column}
