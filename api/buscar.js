@@ -26,12 +26,10 @@ const normalizaciones = {
 // --- Generar sinónimos automáticos desde productos.json ---
 function generarSinonimos(productos) {
   const sinonimos = {};
-
   productos.forEach(p => {
     const palabras = p.titulo.toLowerCase().split(/\s+/);
-
     palabras.forEach(word => {
-      const clean = word.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // sin acentos
+      const clean = word.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       if (!clean || clean.length < 2) return;
 
       // Singular ↔ Plural
@@ -42,7 +40,6 @@ function generarSinonimos(productos) {
       if (clean.length > 5) sinonimos[clean.slice(0, 4)] = clean;
     });
   });
-
   return sinonimos;
 }
 
@@ -65,13 +62,9 @@ const fuseIndex = new Fuse(productos, {
 // --- Normalizar palabra ---
 function normalizarPalabra(word) {
   word = word.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
   if (sinonimos[word]) return sinonimos[word];
   if (normalizaciones[word]) return normalizaciones[word];
-
-  // Singular simple
   if (word.endsWith("s") && word.length > 3) return word.slice(0, -1);
-
   return word;
 }
 
@@ -83,11 +76,10 @@ export default function handler(req, res) {
   const proveedorQ = req.query.proveedor
     ? String(req.query.proveedor).split(",").map(s => s.trim()).filter(Boolean)
     : [];
-  const sort = req.query.sort || "relevance";
   const page = Math.max(1, parseInt(req.query.page || "1", 10));
   const perPage = Math.min(100, Math.max(5, parseInt(req.query.perPage || "24", 10)));
 
-  let results = productos;
+  let results = productos.map(p => ({ ...p, precioNum: parsePrecio(p.precio) }));
 
   // --- FILTRO POR PROVEEDOR ---
   if (proveedorQ.length > 0) {
@@ -95,34 +87,34 @@ export default function handler(req, res) {
   }
 
   // --- FILTRO POR PRECIO ---
-  results = results
-    .map(p => ({ ...p, precioNum: parsePrecio(p.precio) }))
-    .filter(
-      p =>
-        !(minPrice !== null && (p.precioNum === null || p.precioNum < minPrice)) &&
-        !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
-    );
+  results = results.filter(p =>
+    !(minPrice !== null && (p.precioNum === null || p.precioNum < minPrice)) &&
+    !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
+  );
 
-  // --- BÚSQUEDA DIFUSA con Fuse.js ---
   if (q) {
     const palabrasBuscadas = q
       .split(/\s+/)
       .map(normalizarPalabra)
-      .filter(word => word && !stopwords.has(word))
-      .join(" ");
+      .filter(word => word && !stopwords.has(word));
 
-    const fuseResults = fuseIndex.search(palabrasBuscadas);
+    // --- Coincidencias exactas primero ---
+    let exactMatches = results.filter(p =>
+      palabrasBuscadas.every(w => p.titulo.toLowerCase().includes(w))
+    ).map(p => ({ ...p, score: 100 }));
 
-    results = fuseResults.map(r => ({
-      ...r.item,
-      precioNum: parsePrecio(r.item.precio),
-      score: r.score ? 1 / r.score : 100
-    }));
+    // --- Búsqueda difusa para el resto ---
+    let fuseResults = fuseIndex.search(palabrasBuscadas.join(" "));
+    fuseResults = fuseResults
+      .map(r => ({ ...r.item, precioNum: parsePrecio(r.item.precio), score: r.score ? 1 / r.score : 0 }))
+      .filter(r => !exactMatches.some(em => em.titulo === r.titulo)); // evitar duplicados
+
+    results = [...exactMatches, ...fuseResults];
   } else {
     results = results.map(p => ({ ...p, score: 0 }));
   }
 
-  // --- ORDENAMIENTO POR STOCK Y RELEVANCIA ---
+  // --- ORDENAMIENTO POR STOCK Y SCORE ---
   results.sort((a, b) => {
     if (a.stock && !b.stock) return -1;
     if (!a.stock && b.stock) return 1;
