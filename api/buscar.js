@@ -2,13 +2,9 @@ import fs from "fs";
 import path from "path";
 import Fuse from "fuse.js";
 
-// ✅ Esto SIEMPRE apunta a la raíz real del proyecto en Vercel
+// ✅ Ruta a productos.json
 const productosPath = path.join(process.cwd(), "productos.json");
-
-// ✅ Carga segura del JSON
-const productos = JSON.parse(
-  fs.readFileSync(productosPath, "utf-8")
-);
+const productos = JSON.parse(fs.readFileSync(productosPath, "utf-8"));
 
 // --- Convierte precio a número ---
 function parsePrecio(precioStr) {
@@ -21,37 +17,63 @@ function parsePrecio(precioStr) {
   return isFinite(n) ? n : null;
 }
 
-// --- Normalizaciones y singular/plural simplificado ---
+// --- Normalizaciones simples ---
 const normalizaciones = {
-  "aroos": "aros",
-  "runass": "runas",
-  "taroot": "tarot",
-  "tigre": "tigre",
-  "ojotigre": "ojo de tigre"
+  "ojotigre": "ojo de tigre",
+  "taroot": "tarot"
 };
 
-function normalizarPalabra(word) {
-  word = word.toLowerCase().trim();
+// --- Generar sinónimos automáticos desde productos.json ---
+function generarSinonimos(productos) {
+  const sinonimos = {};
 
-  if (normalizaciones[word]) return normalizaciones[word];
+  productos.forEach(p => {
+    const palabras = p.titulo.toLowerCase().split(/\s+/);
 
-  if (
-    word.endsWith("s") &&
-    word.length > 3 &&
-    !/[aeiou]ros$/.test(word) &&
-    !/[aeiou]dos$/.test(word) &&
-    !/[aeiou]nos$/.test(word)
-  ) {
-    return word.slice(0, -1);
-  }
+    palabras.forEach(word => {
+      const clean = word.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // sin acentos
+      if (!clean || clean.length < 2) return;
 
-  return word;
+      // Singular ↔ Plural
+      if (clean.endsWith("s") && clean.length > 3) sinonimos[clean.slice(0, -1)] = clean;
+      else sinonimos[clean + "s"] = clean;
+
+      // Abreviaciones: primeras 4 letras de palabras largas
+      if (clean.length > 5) sinonimos[clean.slice(0, 4)] = clean;
+    });
+  });
+
+  return sinonimos;
 }
+
+const sinonimos = generarSinonimos(productos);
 
 // --- Palabras comunes a ignorar ---
 const stopwords = new Set([
   "de","en","para","con","y","el","la","los","las","un","una","unos","unas"
 ]);
+
+// --- Indexar Fuse.js una sola vez ---
+const fuseIndex = new Fuse(productos, {
+  keys: ["titulo", "proveedor"],
+  includeScore: true,
+  threshold: 0.4,
+  ignoreLocation: true,
+  minMatchCharLength: 2
+});
+
+// --- Normalizar palabra ---
+function normalizarPalabra(word) {
+  word = word.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  if (sinonimos[word]) return sinonimos[word];
+  if (normalizaciones[word]) return normalizaciones[word];
+
+  // Singular simple
+  if (word.endsWith("s") && word.length > 3) return word.slice(0, -1);
+
+  return word;
+}
 
 // --- Handler principal ---
 export default function handler(req, res) {
@@ -83,37 +105,29 @@ export default function handler(req, res) {
 
   // --- BÚSQUEDA DIFUSA con Fuse.js ---
   if (q) {
-    // Filtrar stopwords y normalizar
     const palabrasBuscadas = q
       .split(/\s+/)
       .map(normalizarPalabra)
       .filter(word => word && !stopwords.has(word))
-      .join(" "); // Fuse puede usar string completo
+      .join(" ");
 
-    const fuse = new Fuse(results, {
-      keys: ["titulo", "proveedor"], // campos a buscar
-      includeScore: true,
-      threshold: 0.4, // 0 exacto, 1 muy flexible
-      ignoreLocation: true,
-      minMatchCharLength: 2
-    });
-
-    const fuseResults = fuse.search(palabrasBuscadas);
+    const fuseResults = fuseIndex.search(palabrasBuscadas);
 
     results = fuseResults.map(r => ({
       ...r.item,
-      precioNum: parsePrecio(r.item.precio), // agrega este campo
+      precioNum: parsePrecio(r.item.precio),
       score: r.score ? 1 / r.score : 100
     }));
-
   } else {
     results = results.map(p => ({ ...p, score: 0 }));
   }
 
-  // --- ORDENAMIENTO ---
-  if (sort === "price_asc") results.sort((a, b) => (a.precioNum || 0) - (b.precioNum || 0));
-  else if (sort === "price_desc") results.sort((a, b) => (b.precioNum || 0) - (a.precioNum || 0));
-  else results.sort((a, b) => (b.score || 0) - (a.score || 0)); // por relevancia
+  // --- ORDENAMIENTO POR STOCK Y RELEVANCIA ---
+  results.sort((a, b) => {
+    if (a.stock && !b.stock) return -1;
+    if (!a.stock && b.stock) return 1;
+    return (b.score || 0) - (a.score || 0);
+  });
 
   // --- PAGINACIÓN ---
   const total = results.length;
