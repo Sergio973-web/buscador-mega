@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import Fuse from "fuse.js";
 
-// ✅ Ruta a productos.json
+// Ruta a productos.json
 const productosPath = path.join(process.cwd(), "productos.json");
 const productos = JSON.parse(fs.readFileSync(productosPath, "utf-8"));
 
@@ -23,7 +23,7 @@ const normalizaciones = {
   "taroot": "tarot"
 };
 
-// --- Generar sinónimos automáticos desde productos.json ---
+// --- Generar sinónimos automáticos ---
 function generarSinonimos(productos) {
   const sinonimos = {};
   productos.forEach(p => {
@@ -31,18 +31,13 @@ function generarSinonimos(productos) {
     palabras.forEach(word => {
       const clean = word.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       if (!clean || clean.length < 2) return;
-
-      // Singular ↔ Plural
       if (clean.endsWith("s") && clean.length > 3) sinonimos[clean.slice(0, -1)] = clean;
       else sinonimos[clean + "s"] = clean;
-
-      // Abreviaciones: primeras 4 letras de palabras largas
       if (clean.length > 5) sinonimos[clean.slice(0, 4)] = clean;
     });
   });
   return sinonimos;
 }
-
 const sinonimos = generarSinonimos(productos);
 
 // --- Palabras comunes a ignorar ---
@@ -98,7 +93,7 @@ export default function handler(req, res) {
       .map(normalizarPalabra)
       .filter(word => word && !stopwords.has(word));
 
-    // --- Coincidencias exactas primero ---
+    // --- Coincidencias exactas (todas las palabras) ---
     let exactMatches = results.filter(p =>
       palabrasBuscadas.every(w => p.titulo.toLowerCase().includes(w))
     ).map(p => ({ ...p, score: 100 }));
@@ -114,7 +109,7 @@ export default function handler(req, res) {
     results = results.map(p => ({ ...p, score: 0 }));
   }
 
-  // --- ORDENAMIENTO POR STOCK Y SCORE ---
+  // --- ORDENAMIENTO: primero stock, luego score ---
   results.sort((a, b) => {
     if (a.stock && !b.stock) return -1;
     if (!a.stock && b.stock) return 1;
