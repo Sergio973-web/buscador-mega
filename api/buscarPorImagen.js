@@ -1,6 +1,4 @@
 import formidable from "formidable";
-import fs from "fs";
-import path from "path";
 import { buscarImagenSimilar } from "./utils/compareImages.js";
 import { v2 as cloudinary } from "cloudinary";
 
@@ -36,22 +34,21 @@ export default async function handler(req, res) {
 
       if (Array.isArray(file)) file = file[0];
 
-      // 1️⃣ subir imagen a Cloudinary
+      // 1️⃣ Subir imagen a Cloudinary
       const upload = await cloudinary.uploader.upload(file.filepath, {
         folder: "comparador",
       });
 
-      // 2️⃣ buscar similitudes
+      // 2️⃣ Buscar similitudes
       const resultados = await buscarImagenSimilar(upload.secure_url);
 
-      // 3️⃣ devolver JSON SIEMPRE
+      // 3️⃣ Responder SIEMPRE JSON válido
       return res.status(200).json({
         ok: true,
         total: resultados.length,
         resultados,
       });
     });
-
   } catch (error) {
     console.error("🔥 buscarPorImagen error:", error);
     return res.status(500).json({
