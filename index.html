@@ -377,10 +377,18 @@ document.addEventListener("click", async (e) => {
     "🔍 Buscando productos similares por imagen...";
 
   try {
+    // 1️⃣ Descargar la imagen clickeada
+    const imgRes = await fetch(imagenUrl);
+    const blob = await imgRes.blob();
+
+    // 2️⃣ Crear FormData como archivo
+    const formData = new FormData();
+    formData.append("imagen", blob, "busqueda.jpg");
+
+    // 3️⃣ Enviar como multipart/form-data
     const res = await fetch("/api/buscarPorImagen", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imagenUrl })
+      body: formData,
     });
 
     const data = await res.json();
@@ -397,6 +405,7 @@ document.addEventListener("click", async (e) => {
       "❌ Error al buscar por imagen";
   }
 });
+
 
 
 </script>
