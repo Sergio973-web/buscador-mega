@@ -17,29 +17,33 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Método no permitido" });
   }
 
-  const form = formidable({ multiples: false });
+  // 👉 CASO 1: viene una URL (click en imagen)
+  if (req.headers["content-type"]?.includes("application/json")) {
+    const { imagenUrl } = req.body;
 
-  form.parse(req, async (err, fields, files) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error al leer archivo" });
+    if (!imagenUrl) {
+      return res.status(400).json({ error: "Falta imagenUrl" });
     }
+
+    const resultados = await buscarImagenSimilar(imagenUrl);
+    return res.json({ ok: true, resultados });
+  }
+
+  // 👉 CASO 2: viene archivo (input file)
+  const form = formidable({ multiples: false });
+  form.parse(req, async (err, fields, files) => {
+    if (err) return res.status(500).json({ error: "Error formulario" });
 
     let file = files.imagen;
-    if (!file) {
-      return res.status(400).json({ error: "No se envió imagen" });
-    }
-
+    if (!file) return res.status(400).json({ error: "Sin imagen" });
     if (Array.isArray(file)) file = file[0];
 
-    // 1️⃣ Subir imagen buscada a Cloudinary
     const upload = await cloudinary.uploader.upload(file.filepath, {
-      folder: "comparador",
+      folder: "comparador"
     });
 
-    // 2️⃣ Comparar contra el catálogo
-    const resultado = await buscarImagenSimilar(upload.secure_url);
-
-    res.status(200).json(resultado);
+    const resultados = await buscarImagenSimilar(upload.secure_url);
+    res.json({ ok: true, resultados });
   });
 }
+
