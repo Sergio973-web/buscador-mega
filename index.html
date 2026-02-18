@@ -117,18 +117,25 @@ let lastQuery = "";
 let carrito = JSON.parse(localStorage.getItem("carritoMega") || "{}");
 
 // Escapar HTML
-function escapeHTML(str){ return str ? str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : ''; }
+function escapeHTML(str){ 
+  return str ? str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : ''; 
+}
 
+// Guardar carrito
 function guardarCarrito(){ 
   localStorage.setItem("carritoMega", JSON.stringify(carrito));
   renderCarrito();
 }
 
+// Renderizar carrito
 function renderCarrito(){
   const cont = document.getElementById("cartContent");
   cont.innerHTML = "";
   const proveedores = Object.keys(carrito);
-  if(proveedores.length===0){ cont.innerHTML="<p>El carrito está vacío</p>"; return; }
+  if(proveedores.length===0){ 
+    cont.innerHTML="<p>El carrito está vacío</p>"; 
+    return; 
+  }
 
   proveedores.forEach(prov=>{
     const provDiv = document.createElement("div");
@@ -161,6 +168,7 @@ function renderCarrito(){
   });
 }
 
+// Cargar proveedores
 async function cargarProveedores(){
   try{
     const res = await fetch(API_BASE + "/proveedores");
@@ -176,6 +184,7 @@ async function cargarProveedores(){
   }
 }
 
+// Buscar productos normales
 async function buscar(resetPage = true){
   if(resetPage) page=1;
   const q = document.getElementById("q").value.trim();
@@ -239,7 +248,6 @@ async function buscar(resetPage = true){
         });
         guardarCarrito();
       });
-
     });
 
     document.getElementById("pageInfo").textContent=`Página ${data.page} / ${Math.ceil(data.total/data.perPage)||1}`;
@@ -249,28 +257,14 @@ async function buscar(resetPage = true){
   }
 }
 
-document.getElementById("buscarBtn").addEventListener("click", ()=>buscar(true));
-document.getElementById("q").addEventListener("keydown", e=>{ if(e.key==='Enter') buscar(true); });
-document.getElementById("prevBtn").addEventListener("click", ()=>{ if(page>1){ page--; buscar(false);} });
-document.getElementById("nextBtn").addEventListener("click", ()=>{ page++; buscar(false);} );
-
-// toggle carrito
-document.getElementById("toggleCart").addEventListener("click", ()=>{ document.getElementById("carrito").classList.toggle("open"); });
-
-(async ()=>{
-  await cargarProveedores();
-  buscar(true);
-  renderCarrito();
-})();
-
+// Mostrar resultados de búsqueda por imagen
 function mostrarResultadosImagen(resultados) {
   const cont = document.getElementById("resultados");
-  cont.innerHTML = ""; // limpiar contenedor antes
-
+  cont.innerHTML = ""; // limpiar contenedor
   const placeholder = "https://dummyimage.com/300x300/cccccc/000000&text=No+Image";
 
   resultados.forEach(item => {
-    const imgSrc = item.imagen || placeholder;
+    const imgSrc = item.imagenCloud || item.imagen || placeholder;
 
     const div = document.createElement("div");
     div.className = "card";
@@ -304,110 +298,66 @@ function mostrarResultadosImagen(resultados) {
   });
 }
 
-// Evento del botón
-document.getElementById("btnBuscar").addEventListener("click", enviarImagen);
-
-async function enviarImagen() {
+// Buscar por imagen (click o input file)
+async function buscarPorImagen(imagenBlob) {
   try {
-    const fileInput = document.getElementById("imagenInput");
-
-    if (!fileInput.files.length) {
-      alert("Seleccioná una imagen primero");
-      return;
-    }
-
-    // Limpiamos el contenedor de productos normales antes de mostrar resultados
-    document.getElementById("resultados").innerHTML = "";
-
     const formData = new FormData();
-    formData.append("imagen", fileInput.files[0]); // 🔥 NOMBRE 'imagen' PARA FORMIDABLE
+    formData.append("imagen", imagenBlob, "busqueda.jpg");
 
-    // POR AHORA SOLO HACEMOS UN FETCH VACÍO PARA FUTURA LÓGICA
-    const response = await fetch("/api/buscarPorImagen", { 
-      method: "POST", 
-      body: formData 
-    });
+    const res = await fetch("/api/buscarPorImagen", { method: "POST", body: formData });
 
-    if (!response.ok) {
-      const txt = await response.text();
+    if (!res.ok) {
+      const txt = await res.text();
       console.error("❌ ERROR BACKEND:", txt);
-      document.getElementById("resultado").textContent = txt;
+      document.getElementById("stats").textContent = txt;
       return;
     }
 
-    const data = await response.json();
-    console.log("RESULTADO IMAGEN (dummy):", data);
-
-    if (data.ok) {
-      // Mostrar resultados en tarjetas (mismo estilo que productos normales)
+    const data = await res.json();
+    if (data.ok && data.resultados.length) {
       mostrarResultadosImagen(data.resultados);
-      document.getElementById("resultado").textContent = "";
+      document.getElementById("stats").textContent = `🔍 Resultados encontrados: ${data.resultados.length}`;
     } else {
-      document.getElementById("resultado").textContent =
-        "No se encontraron coincidencias";
+      document.getElementById("stats").textContent = "⚠️ No se encontraron resultados por imagen";
     }
-
   } catch (err) {
     console.error("⚠ Error enviando al backend:", err);
-    document.getElementById("resultado").textContent = "Error al procesar imagen";
+    document.getElementById("stats").textContent = "❌ Error al buscar por imagen";
   }
 }
 
-// Función dummy para mostrar resultados de imagen
-function mostrarResultadosImagen(resultados) {
-  const cont = document.getElementById("resultados");
-  cont.innerHTML = "";
-
-  // Por ahora solo mostramos los títulos como ejemplo
-  resultados.forEach(p => {
-    const card = document.createElement("div");
-    card.className = "producto";
-    card.textContent = p.titulo || "Producto";
-    cont.appendChild(card);
-  });
-}
-
+// Listener click en imágenes
 document.addEventListener("click", async (e) => {
   if (!e.target.classList.contains("img-busqueda")) return;
-
   const imagenUrl = e.target.dataset.img || e.target.src;
   if (!imagenUrl) return;
 
-  document.getElementById("stats").textContent =
-    "🔍 Buscando productos similares por imagen...";
-
-  try {
-    // 1️⃣ Descargar la imagen clickeada
-    const imgRes = await fetch(imagenUrl);
-    const blob = await imgRes.blob();
-
-    // 2️⃣ Crear FormData como archivo
-    const formData = new FormData();
-    formData.append("imagen", blob, "busqueda.jpg");
-
-    // 3️⃣ Enviar como multipart/form-data
-    const res = await fetch("/api/buscarPorImagen", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await res.json();
-
-    if (data.ok) {
-      mostrarResultadosImagen(data.resultados);
-    } else {
-      document.getElementById("stats").textContent =
-        "⚠️ No se encontraron resultados por imagen";
-    }
-  } catch (err) {
-    console.error(err);
-    document.getElementById("stats").textContent =
-      "❌ Error al buscar por imagen";
-  }
+  const imgRes = await fetch(imagenUrl);
+  const blob = await imgRes.blob();
+  await buscarPorImagen(blob);
 });
 
+// Listener input file
+document.getElementById("btnBuscar").addEventListener("click", async () => {
+  const fileInput = document.getElementById("imagenInput");
+  if (!fileInput.files.length) return alert("Seleccioná una imagen primero");
+  await buscarPorImagen(fileInput.files[0]);
+});
 
+// Botones de búsqueda normal
+document.getElementById("buscarBtn").addEventListener("click", ()=>buscar(true));
+document.getElementById("q").addEventListener("keydown", e=>{ if(e.key==='Enter') buscar(true); });
+document.getElementById("prevBtn").addEventListener("click", ()=>{ if(page>1){ page--; buscar(false);} });
+document.getElementById("nextBtn").addEventListener("click", ()=>{ page++; buscar(false);} );
 
+// Toggle carrito
+document.getElementById("toggleCart").addEventListener("click", ()=>{ document.getElementById("carrito").classList.toggle("open"); });
+
+(async ()=>{
+  await cargarProveedores();
+  buscar(true);
+  renderCarrito();
+})();
 </script>
 
 </body>
