@@ -20,7 +20,17 @@ check_proveedores.js
 
 # Ignorar carpetas de desarrollo
 .vscode/
+
+# Ignorar scripts locales (no producción)
+scripts/
+
+# Ignorar archivos de entorno
 .env
+.env*
+.env.*
+
+# Ignorar archivos batch locales
+*.bat
 
 # PERMITIR SOLO LO NECESARIO
 !index.html
@@ -31,3 +41,4 @@ check_proveedores.js
 !productos.json
 !package.json
 !package-lock.json
+

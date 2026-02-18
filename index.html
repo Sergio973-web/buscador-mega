@@ -314,7 +314,7 @@ async function enviarImagen() {
     formData.append("imagen", fileInput.files[0]); // 🔥 NOMBRE 'imagen' PARA FORMIDABLE
 
     // POR AHORA SOLO HACEMOS UN FETCH VACÍO PARA FUTURA LÓGICA
-    const response = await fetch("/api/buscarImagen", { 
+    const response = await fetch("/api/buscarPorImagen", { 
       method: "POST", 
       body: formData 
     });
