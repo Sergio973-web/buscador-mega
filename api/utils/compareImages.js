@@ -1,14 +1,17 @@
 // utils/compareImages.js
 import fs from "fs";
+import path from "path";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// cargar embeddings una sola vez
+// 📌 cargar embeddings una sola vez (al cold start)
+const filePath = path.join(process.cwd(), "productos_embeddings.json");
+
 const productos = JSON.parse(
-  fs.readFileSync("./productos_embeddings.json", "utf8")
+  fs.readFileSync(filePath, "utf8")
 );
 
 // cosine similarity
@@ -50,7 +53,7 @@ export async function buscarImagenSimilar(imageUrl) {
 
   const descripcion = vision.output_text.trim();
 
-  // 2️⃣ embedding de la imagen (vía texto)
+  // 2️⃣ embedding de la descripción
   const embRes = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: descripcion,
