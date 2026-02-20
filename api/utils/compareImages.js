@@ -1,59 +1,77 @@
+// utils/compareImages.js
 import fs from "fs";
-import path from "path";
-import axios from "axios";
-import crypto from "crypto";
-import { fileURLToPath } from "url";
+import OpenAI from "openai";
 
-// Fix __dirname en ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-// productos.json (raíz del proyecto)
-const PRODUCTOS_FILE = path.join(__dirname, "..", "..", "productos.json");
+// cargar embeddings una sola vez
+const productos = JSON.parse(
+  fs.readFileSync("./productos_embeddings.json", "utf8")
+);
 
-function hashImagen(buffer) {
-  return crypto.createHash("sha1").update(buffer).digest("hex");
-}
+// cosine similarity
+function cosineSimilarity(a, b) {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
 
-function distanciaHash(hash1, hash2) {
-  if (!hash1 || !hash2) return Infinity;
-  let dist = 0;
-  for (let i = 0; i < hash1.length; i++) {
-    if (hash1[i] !== hash2[i]) dist++;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
   }
-  return dist;
+
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-export async function buscarImagenSimilar(imagenUrl) {
-  // 1️⃣ Descargar imagen subida (Cloudinary)
-  const res = await axios.get(imagenUrl, {
-    responseType: "arraybuffer",
+export async function buscarImagenSimilar(imageUrl) {
+  // 1️⃣ describir la imagen subida
+  const vision = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "Describe este producto de forma breve y comercial, indicando tipo, material y uso.",
+          },
+          {
+            type: "input_image",
+            image_url: imageUrl,
+          },
+        ],
+      },
+    ],
   });
 
-  const hashConsulta = hashImagen(res.data);
+  const descripcion = vision.output_text.trim();
 
-  // 2️⃣ Leer productos.json
-  const productos = JSON.parse(
-    fs.readFileSync(PRODUCTOS_FILE, "utf8")
-  );
+  // 2️⃣ embedding de la imagen (vía texto)
+  const embRes = await openai.embeddings.create({
+    model: "text-embedding-3-small",
+    input: descripcion,
+  });
 
-  // 3️⃣ Comparar contra hashes cacheados
-  const resultados = [];
+  const queryEmbedding = embRes.data[0].embedding;
 
-  for (const p of productos) {
-    if (!p.hashVisual || !p.imagenCloud) continue;
+  // 3️⃣ comparar contra catálogo
+  const resultados = productos
+    .map((prod) => ({
+      ...prod,
+      score: cosineSimilarity(queryEmbedding, prod.embedding),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
 
-    const distancia = distanciaHash(hashConsulta, p.hashVisual);
-
-    resultados.push({
-      ...p,
-      score: distancia,
-    });
-  }
-
-  // 4️⃣ Ordenar por similitud
-  resultados.sort((a, b) => a.score - b.score);
-
-  // 5️⃣ Devolver top 10
-  return resultados.slice(0, 10);
+  // 4️⃣ devolver resultados
+  return resultados.map((r) => ({
+    titulo: r.titulo,
+    descripcion: r.descripcion,
+    imagen: r.imagen,
+    score: Number(r.score.toFixed(4)),
+  }));
 }
