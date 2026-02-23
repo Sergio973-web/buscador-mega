@@ -1,39 +1,38 @@
 // utils/compareImages.js
 import OpenAI from "openai";
-import fetch from "node-fetch"; // para Node.js
+import fetch from "node-fetch"; // Node.js
 
 // ⚡ Inicializar OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 📌 URL de descarga directa de Google Drive
-const DRIVE_URL =
-  "https://drive.google.com/uc?export=download&id=1A79aWXoVZDlxbjm21bhFBace8BQ-LqjB";
+// 📌 URL de descarga directa desde Dropbox
+// Asegurate de que termine en "?dl=1" para descarga directa
+const DROPBOX_URL =
+  "https://www.dropbox.com/scl/fi/r6elusg6cjmok15qrchib/productos_embeddings.json?rlkey=y3xzil2yvigw2ssomcw4etzmh&dl=1";
 
-// 📌 cargar embeddings una sola vez (cold start)
+// 📌 cache para embeddings (cold start)
 let productosCache = null;
 
 async function cargarProductos() {
   if (productosCache) return productosCache;
 
   try {
-    const res = await fetch(DRIVE_URL);
+    const res = await fetch(DROPBOX_URL);
     if (!res.ok) throw new Error(`Error descargando JSON: ${res.status}`);
     productosCache = await res.json();
-    console.log("✅ Productos embeddings cargados desde Google Drive");
+    console.log("✅ Productos embeddings cargados desde Dropbox");
     return productosCache;
   } catch (err) {
-    console.error("❌ Error cargando productos desde Google Drive:", err);
+    console.error("❌ Error cargando productos desde Dropbox:", err);
     throw err;
   }
 }
 
 // cosine similarity
 function cosineSimilarity(a, b) {
-  let dot = 0,
-    normA = 0,
-    normB = 0;
+  let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
     normA += a[i] * a[i];
@@ -75,7 +74,7 @@ export async function buscarImagenSimilar(imageUrl) {
 
   const queryEmbedding = embRes.data[0].embedding;
 
-  // 3️⃣ obtener catálogo desde Google Drive
+  // 3️⃣ obtener catálogo desde Dropbox
   const productos = await cargarProductos();
 
   // 4️⃣ comparar contra catálogo
