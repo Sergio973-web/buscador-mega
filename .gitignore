@@ -17,7 +17,7 @@ listar_tablas.js
 generarProductos.js
 servidor_mega.js
 check_proveedores.js
-
+productos_embeddings.json
 # Ignorar carpetas de desarrollo
 .vscode/
 
