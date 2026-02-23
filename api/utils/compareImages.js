@@ -10,7 +10,7 @@ const openai = new OpenAI({
 // 📌 URL de descarga directa desde Dropbox
 // Asegurate de que termine en "?dl=1" para descarga directa
 const DROPBOX_URL =
-  "https://www.dropbox.com/scl/fi/r6elusg6cjmok15qrchib/productos_embeddings.json?rlkey=y3xzil2yvigw2ssomcw4etzmh&dl=1";
+  "https://www.dropbox.com/scl/fi/tcqda5vjrf6p7jkdkh3we/productos_embeddings_reducido.json?rlkey=kmczupre7deqmb3qo5swxwx74&st=w8mjjiha&dl=1";
 
 // 📌 cache para embeddings (cold start)
 let productosCache = null;
