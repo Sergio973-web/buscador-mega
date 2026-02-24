@@ -42,3 +42,4 @@ scripts/
 !package.json
 !package-lock.json
 
+.vercel
