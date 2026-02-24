@@ -13,6 +13,7 @@
     "formidable": "^3.5.4",
     "fuse.js": "^7.1.0",
     "image-hash": "^7.0.1",
+    "openai": "^6.24.0",
     "sharp": "^0.34.5"
   }
 }
