@@ -115,6 +115,24 @@ let page = 1;
 let perPage = 24;
 let lastQuery = "";
 let carrito = JSON.parse(localStorage.getItem("carritoMega") || "{}");
+let relojInterval = null;
+let segundosImagen = 0;
+
+function iniciarRelojImagen() {
+  segundosImagen = 0;
+  document.getElementById("stats").textContent = "🕒 Buscando por imagen... 0s";
+
+  relojInterval = setInterval(() => {
+    segundosImagen++;
+    document.getElementById("stats").textContent =
+      `🕒 Buscando por imagen... ${segundosImagen}s`;
+  }, 1000);
+}
+
+function detenerRelojImagen() {
+  clearInterval(relojInterval);
+  relojInterval = null;
+}
 
 // Escapar HTML
 function escapeHTML(str){ 
@@ -300,6 +318,8 @@ function mostrarResultadosImagen(resultados) {
 
 // Buscar por imagen (click o input file)
 async function buscarPorImagen(imagenBlob) {
+  iniciarRelojImagen();
+
   try {
     const formData = new FormData();
     formData.append("imagen", imagenBlob, "busqueda.jpg");
@@ -308,20 +328,23 @@ async function buscarPorImagen(imagenBlob) {
 
     if (!res.ok) {
       const txt = await res.text();
-      console.error("❌ ERROR BACKEND:", txt);
+      detenerRelojImagen();
       document.getElementById("stats").textContent = txt;
       return;
     }
 
     const data = await res.json();
+    detenerRelojImagen();
+
     if (data.ok && data.resultados.length) {
       mostrarResultadosImagen(data.resultados);
-      document.getElementById("stats").textContent = `🔍 Resultados encontrados: ${data.resultados.length}`;
+      document.getElementById("stats").textContent =
+        `🔍 Resultados: ${data.resultados.length} — ⏱ ${segundosImagen}s`;
     } else {
-      document.getElementById("stats").textContent = "⚠️ No se encontraron resultados por imagen";
+      document.getElementById("stats").textContent = "⚠️ No se encontraron resultados";
     }
   } catch (err) {
-    console.error("⚠ Error enviando al backend:", err);
+    detenerRelojImagen();
     document.getElementById("stats").textContent = "❌ Error al buscar por imagen";
   }
 }
