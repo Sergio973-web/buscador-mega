@@ -1,7 +1,6 @@
 // api/utils/compareImages.js
-import fs from "fs";
-import path from "path";
 import OpenAI from "openai";
+import fetch from "node-fetch"; // Node 18+ ya tiene fetch global, sino instalar node-fetch
 
 // ⚡ Inicializar OpenAI
 const openai = new OpenAI({
@@ -20,25 +19,35 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// ⚡ Cargar productos desde los clusters
-async function cargarProductos() {
-  const clusterFolder = path.join(process.cwd(), "embeddings");
-  const archivos = fs.readdirSync(clusterFolder).filter(f => f.endsWith(".json"));
+// ⚡ URLs de clusters en GitHub
+const clusterURLs = [
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_0.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_1.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_2.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_3.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_4.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_5.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_6.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_7.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_8.json",
+  "https://raw.githubusercontent.com/Sergio973-web/buscador-mega/main/embeddings/cluster_9.json",
+];
 
+// ⚡ Cargar productos desde clusters en línea
+async function cargarProductos() {
   let productos = [];
-  for (const file of archivos) {
+  for (const url of clusterURLs) {
     try {
-      const data = JSON.parse(fs.readFileSync(path.join(clusterFolder, file), "utf8"));
+      const res = await fetch(url);
+      const data = await res.json();
       productos = productos.concat(data);
     } catch (err) {
-      console.warn(`⚠️ Error leyendo cluster ${file}:`, err);
+      console.error(`⚠️ Error cargando cluster desde ${url}:`, err);
     }
   }
 
-  console.log("✅ Productos cargados desde clusters:", productos.length);
-
+  console.log("✅ Productos cargados desde clusters en línea:", productos.length);
   if (productos.length > 0) {
-    // Mostrar solo el primer producto para no llenar los logs
     console.log("📌 Primer producto cargado:", {
       titulo: productos[0].titulo,
       tieneEmbedding: !!productos[0].embedding,
@@ -84,7 +93,7 @@ export async function buscarImagenSimilar(imageUrl) {
     const queryEmbedding = embRes.data?.[0]?.embedding;
     if (!queryEmbedding) return [];
 
-    // 3️⃣ Cargar productos desde clusters
+    // 3️⃣ Cargar productos desde clusters en línea
     const productos = await cargarProductos();
     if (!productos || productos.length === 0) return [];
 
