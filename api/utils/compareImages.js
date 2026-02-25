@@ -34,7 +34,20 @@ async function cargarProductos() {
       console.warn(`⚠️ Error leyendo cluster ${file}:`, err);
     }
   }
+
   console.log("✅ Productos cargados desde clusters:", productos.length);
+
+  if (productos.length > 0) {
+    // Mostrar solo el primer producto para no llenar los logs
+    console.log("📌 Primer producto cargado:", {
+      titulo: productos[0].titulo,
+      tieneEmbedding: !!productos[0].embedding,
+      embeddingLength: productos[0].embedding?.length || 0
+    });
+  } else {
+    console.warn("⚠️ No se cargaron productos desde los clusters.");
+  }
+
   return productos;
 }
 
