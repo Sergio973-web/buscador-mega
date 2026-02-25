@@ -122,9 +122,12 @@ export async function buscarImagenSimilar(imageUrl) {
       titulo: r.titulo,
       descripcion: r.descripcion,
       imagen: r.imagen,
+      precio: r.precio || "",      // si lo tenés en productos.json
+      proveedor: r.proveedor || "",// si lo tenés en productos.json
+      url: r.url || "",            // URL del producto
       score: Number(r.score.toFixed(4)),
     }));
-
+        
   } catch (err) {
     console.error("🔥 Error en buscarImagenSimilar:", err);
     return [];
