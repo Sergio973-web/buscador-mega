@@ -318,8 +318,6 @@ function mostrarResultadosImagen(resultados) {
 
 // Buscar por imagen (click o input file)
 async function buscarPorImagen(imagenBlob) {
-  iniciarRelojImagen();
-
   try {
     const formData = new FormData();
     formData.append("imagen", imagenBlob, "busqueda.jpg");
@@ -355,9 +353,16 @@ document.addEventListener("click", async (e) => {
   const imagenUrl = e.target.dataset.img || e.target.src;
   if (!imagenUrl) return;
 
-  const imgRes = await fetch(imagenUrl);
-  const blob = await imgRes.blob();
-  await buscarPorImagen(blob);
+  iniciarRelojImagen(); // ⏱️ ARRANCA ACÁ
+
+  try {
+    const imgRes = await fetch(imagenUrl);
+    const blob = await imgRes.blob();
+    await buscarPorImagen(blob);
+  } catch (err) {
+    detenerRelojImagen();
+    document.getElementById("stats").textContent = "❌ Error cargando imagen";
+  }
 });
 
 // Listener input file
