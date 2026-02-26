@@ -433,6 +433,7 @@ document.addEventListener("click", async (e) => {
 document.getElementById("btnBuscar").addEventListener("click", async () => {
   const fileInput = document.getElementById("imagenInput");
   if (!fileInput.files.length) return alert("Seleccioná una imagen primero");
+  iniciarRelojImagen(); // ⏱️ ARRANCA ACÁ
   await buscarPorImagen(fileInput.files[0]);
 });
 
