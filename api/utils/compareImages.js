@@ -128,7 +128,21 @@ export async function buscarImagenSimilar(imageUrl) {
         content: [
           {
             type: "input_text",
-            text: "Describe este producto de forma breve indicando tipo material y uso."
+            text: `
+                  Describe este producto de forma MUY específica.
+
+                  Incluye:
+                  - tipo de objeto
+                  - colores
+                  - forma
+                  - textura
+                  - material
+                  - posible uso
+                  - estilo (decorativo, religioso, juguete, etc)
+
+                  La descripción debe diferenciar claramente este producto de otros similares.
+                  `
+
           },
           { type: "input_image", image_url: imageUrl }
         ]
