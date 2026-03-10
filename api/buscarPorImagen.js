@@ -3,25 +3,10 @@
 import formidable from "formidable";
 import { buscarImagenSimilar } from "./utils/compareImages.js";
 import { v2 as cloudinary } from "cloudinary";
-import fs from "fs";
-import path from "path";
 
 export const config = {
   api: { bodyParser: false },
 };
-
-// ruta donde estarán los embeddings locales
-const EMBEDDINGS_PATH = path.join(process.cwd(), "embeddings", "image_embeddings.json");
-
-// verificar si existen embeddings
-let embeddingsDisponibles = false;
-
-if (fs.existsSync(EMBEDDINGS_PATH)) {
-  console.log("✅ Embeddings encontrados. Búsqueda por imagen activada.");
-  embeddingsDisponibles = true;
-} else {
-  console.log("⚠️ Embeddings NO encontrados. Búsqueda por imagen desactivada.");
-}
 
 // Configuración de Cloudinary
 cloudinary.config({
@@ -31,15 +16,8 @@ cloudinary.config({
 });
 
 export default async function handler(req, res) {
-  console.log("📌 Endpoint /api/buscarPorImagen llamado");
 
-  // si no hay embeddings se cancela la búsqueda
-  if (!embeddingsDisponibles) {
-    return res.status(200).json({
-      ok: false,
-      error: "Busqueda por imagen no disponible en esta instalación",
-    });
-  }
+  console.log("📌 Endpoint /api/buscarPorImagen llamado");
 
   if (req.method !== "POST") {
     console.warn("⚠️ Método no permitido:", req.method);
@@ -47,6 +25,7 @@ export default async function handler(req, res) {
   }
 
   try {
+
     const form = formidable({ multiples: false });
 
     form.parse(req, async (err, fields, files) => {
@@ -113,4 +92,5 @@ export default async function handler(req, res) {
       detalle: error.message,
     });
   }
+
 }
