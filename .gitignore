@@ -10,6 +10,9 @@ node_modules/
 Imagenes_productos_proveedores/
 bases/
 
+# Ignorar embeddings locales
+embeddings/
+
 # Ignorar scripts que no van a Vercel
 descargar_imagenes.js
 exportar_base_datos_a_json.js
