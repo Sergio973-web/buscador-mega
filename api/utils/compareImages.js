@@ -163,13 +163,14 @@ export async function buscarImagenSimilar(imageUrl) {
     resultados.sort((a,b)=>b.score-a.score);
 
     return resultados.slice(0,10).map(r=>({
-      titulo:r.titulo,
-      descripcion:r.descripcion,
-      imagen:r.imagen,
-      precio:r.precio || "",
-      proveedor:r.proveedor || "",
-      url:r.url || "",
-      score:Number(r.score.toFixed(4))
+      titulo: r.titulo,
+      descripcion: r.descripcion,
+      imagen: r.imagen || "",
+      imagenCloud: r.imagenCloud || "",
+      precio: r.precio || "",
+      proveedor: r.proveedor || "",
+      url: r.url || "",
+      score: Number(r.score.toFixed(4))
     }));
 
   } catch(err) {
