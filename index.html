@@ -170,10 +170,7 @@ main{padding:18px 24px}
 </div>
 
 <script>
-const API_BASE =
-  window.location.hostname === "localhost"
-    ? "http://localhost:3001/api"
-    : "/api";
+const API_BASE = "http://localhost:3001/api";
 let page = 1;
 let perPage = 24;
 let lastQuery = "";
