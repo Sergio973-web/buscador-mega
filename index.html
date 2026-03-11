@@ -170,7 +170,10 @@ main{padding:18px 24px}
 </div>
 
 <script>
-const API_BASE = "/api";
+const API_BASE =
+  window.location.hostname === "localhost"
+    ? "http://localhost:3001/api"
+    : "/api";
 let page = 1;
 let perPage = 24;
 let lastQuery = "";
@@ -391,7 +394,7 @@ async function buscarPorImagen(imagenBlob) {
     const formData = new FormData();
     formData.append("imagen", imagenBlob, "busqueda.jpg");
 
-    const res = await fetch("/api/buscarPorImagen", { method: "POST", body: formData });
+    const res = await fetch(API_BASE + "/buscarPorImagen", { method: "POST", body: formData });
 
     if (!res.ok) {
       const txt = await res.text();
