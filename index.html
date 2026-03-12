@@ -170,24 +170,7 @@ main{padding:18px 24px}
 </div>
 
 <script>
-let API_BASE = "/api";
-
-(async () => {
-
-  try {
-
-    const res = await fetch("http://localhost:3001/ping");
-
-    if (res.ok) {
-      API_BASE = "http://localhost:3001/api";
-      console.log("🟢 Usando servidor local");
-    }
-
-  } catch {
-    console.log("🌐 Usando API remota");
-  }
-
-})();
+const API_BASE = "/api";
 let page = 1;
 let perPage = 24;
 let lastQuery = "";
@@ -408,7 +391,28 @@ async function buscarPorImagen(imagenBlob) {
     const formData = new FormData();
     formData.append("imagen", imagenBlob, "busqueda.jpg");
 
-    const res = await fetch(API_BASE + "/buscarPorImagen", { method: "POST", body: formData });
+    let res;
+
+    try {
+
+      // intentar servidor local primero
+      res = await fetch("http://localhost:3001/api/buscarPorImagen", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log("🟢 Usando servidor local");
+
+    } catch (err) {
+
+      console.log("🌐 Servidor local no disponible, usando API remota");
+
+      res = await fetch(API_BASE + "/buscarPorImagen", {
+        method: "POST",
+        body: formData
+      });
+
+    }
 
     if (!res.ok) {
       const txt = await res.text();
