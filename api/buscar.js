@@ -8,8 +8,16 @@ const productos = JSON.parse(fs.readFileSync(productosPath, "utf-8"));
 
 // --- Convierte precio a número ---
 function parsePrecio(precioStr) {
-  if (!precioStr) return null;
-  const only = precioStr.replace(/[^\d,.\-]/g, "").replace(/\.(?=\d{3,})/g, "").replace(",", ".");
+  if (precioStr === null || precioStr === undefined) return null;
+
+  // Convertir a string para evitar TypeError
+  precioStr = String(precioStr);
+
+  let only = precioStr
+    .replace(/[^\d,.\-]/g, "")            // quitar cualquier caracter que no sea dígito, coma, punto o guion
+    .replace(/\.(?=\d{3,})/g, "")         // quitar puntos de miles
+    .replace(",", ".");                    // reemplazar coma decimal por punto
+
   const n = parseFloat(only);
   return isFinite(n) ? n : null;
 }
