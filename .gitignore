@@ -1,6 +1,9 @@
 # Ignorar node_modules
 node_modules/
 
+# Servidor local para embeddings (no producción)
+local-server.js
+
 # Ignorar archivos grandes o temporales
 *.log
 *.tmp

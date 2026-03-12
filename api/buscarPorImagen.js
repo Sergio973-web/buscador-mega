@@ -1,77 +1,86 @@
-// api/buscarPorImagen.js
 import formidable from "formidable";
 import fs from "fs";
 import path from "path";
-import { buscarImagenSimilar } from "./utils/compareImages.js";
 
 export const config = {
   api: { bodyParser: false },
 };
 
-// Verificar si existen embeddings locales
 const EMBEDDINGS_PATH = path.join(process.cwd(), "embeddings", "embeddings.json");
-let embeddingsDisponibles = fs.existsSync(EMBEDDINGS_PATH);
-
-if (embeddingsDisponibles) {
-  console.log("✅ Embeddings locales encontrados. Búsqueda por imagen activada.");
-} else {
-  console.log("⚠️ Embeddings locales NO encontrados. Búsqueda por imagen desactivada.");
-}
 
 export default async function handler(req, res) {
-  console.log("📌 Endpoint /api/buscarPorImagen llamado");
 
-  if (!embeddingsDisponibles) {
-    return res.status(200).json({
-      ok: false,
-      error: "Busqueda por imagen no disponible en esta instalación",
-    });
-  }
+  console.log("📌 Endpoint /api/buscarPorImagen llamado");
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Método no permitido" });
   }
 
+  const embeddingsDisponibles = fs.existsSync(EMBEDDINGS_PATH);
+
   try {
     const form = formidable({ multiples: false });
 
     form.parse(req, async (err, fields, files) => {
+
       if (err) {
         console.error("❌ Error formidable:", err);
-        return res.status(500).json({ error: "Error parseando imagen", detalle: err.message });
+        return res.status(500).json({ error: "Error parseando imagen" });
       }
 
       let file = files.imagen;
       if (!file) {
         return res.status(400).json({ error: "No se recibió imagen" });
       }
+
       if (Array.isArray(file)) file = file[0];
 
-      try {
-        // Convertir archivo a URL local
-        const localUrl = `file://${file.filepath}`;
+      // Si existen embeddings locales
+      if (embeddingsDisponibles) {
 
-        console.log("📌 Buscando similitudes para imagen local:", file.filepath);
+        console.log("✅ Usando embeddings locales");
+
+        const { buscarImagenSimilar } = await import("./utils/compareImages.js");
+
+        const localUrl = `file://${file.filepath}`;
 
         const resultados = await buscarImagenSimilar(localUrl);
 
-        return res.status(200).json({
+        return res.json({
           ok: true,
-          total: resultados.length,
-          resultados,
+          resultados
         });
 
-      } catch (innerErr) {
-        console.error("🔥 Error buscando similitudes:", innerErr);
-        return res.status(500).json({
-          error: "Error procesando imagen o buscando similitudes",
-          detalle: innerErr.message,
-        });
       }
+
+      // Si NO existen embeddings → reenviar a servidor local
+      console.log("⚠️ Embeddings no encontrados. Redirigiendo a localhost");
+
+      const formData = new FormData();
+      const buffer = fs.readFileSync(file.filepath);
+
+      formData.append("imagen", new Blob([buffer]), "busqueda.jpg");
+
+      const response = await fetch("http://localhost:3001/api/buscarPorImagen", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+
+      return res.json(data);
+
     });
 
   } catch (error) {
-    console.error("🔥 Error inesperado en handler:", error);
-    return res.status(500).json({ error: "Error interno del servidor", detalle: error.message });
+
+    console.error("🔥 Error inesperado:", error);
+
+    return res.status(500).json({
+      error: "Error interno",
+      detalle: error.message
+    });
+
   }
+
 }
