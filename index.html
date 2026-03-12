@@ -170,7 +170,24 @@ main{padding:18px 24px}
 </div>
 
 <script>
-const API_BASE = "/api";
+let API_BASE = "/api";
+
+(async () => {
+
+  try {
+
+    const res = await fetch("http://localhost:3001/ping");
+
+    if (res.ok) {
+      API_BASE = "http://localhost:3001/api";
+      console.log("🟢 Usando servidor local");
+    }
+
+  } catch {
+    console.log("🌐 Usando API remota");
+  }
+
+})();
 let page = 1;
 let perPage = 24;
 let lastQuery = "";
