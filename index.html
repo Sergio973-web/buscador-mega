@@ -309,7 +309,7 @@ async function buscar(resetPage = true){
   
         <div class="meta">
           <div class="title">${escapeHTML(item.titulo)}</div>
-          <div class="price">${escapeHTML(item.precio)||""}</div>
+          <div class="price">${escapeHTML(String(item.precio ?? ""))}</div>
           <div class="small">Proveedor: <span class="provider">${escapeHTML(item.proveedor)}</span></div>
           <div class="footer-actions">
             <a class="btn" href="${escapeHTML(item.url)}" target="_blank">Ir al producto</a>
