@@ -511,13 +511,15 @@ const params=new URLSearchParams()
 if(q)params.set("q",q)
 
 params.set("page",page)
-
 params.set("perPage",perPage)
 
 document.getElementById("stats").textContent="Buscando..."
 
-const r=await fetch(API_BASE+"/buscar?"+params)
+iniciarRelojImagen()   // ← mostrar overlay y spinner
 
+try{
+
+const r=await fetch(API_BASE+"/buscar?"+params)
 const data=await r.json()
 
 const cont=document.getElementById("resultados")
@@ -533,29 +535,23 @@ div.className="card"
 div.innerHTML=`
 
 <div class="thumb">
-
 <img src="${item.imagenCloud||item.imagen}" class="img-busqueda" data-img="${item.imagenCloud||item.imagen}">
-
 </div>
 
 <div class="meta">
-
 <div class="title">${item.titulo}</div>
-
 <div class="price">${item.precio}</div>
 
-<div class="small">Proveedor: <span class="provider">${item.proveedor}</span></div>
+<div class="small">
+Proveedor: <span class="provider">${item.proveedor}</span>
+</div>
 
 <div class="footer-actions">
-
 <a class="btn" target="_blank" href="${item.url}">Ir</a>
-
 <button class="btn add">Carrito</button>
-
 </div>
 
 </div>
-
 `
 
 cont.appendChild(div)
@@ -573,6 +569,13 @@ guardarCarrito()
 })
 
 document.getElementById("pageInfo").textContent="Página "+data.page
+
+}
+finally{
+
+detenerRelojImagen()   // ← ocultar overlay
+
+}
 
 }
 
