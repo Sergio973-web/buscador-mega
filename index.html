@@ -1,602 +1,483 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-
 <head>
-
-<meta charset="utf-8">
-
-<meta name="viewport" content="width=device-width,initial-scale=1">
-
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <link rel="icon" href="https://dummyimage.com/32x32/000/fff.png">
-
 <title>Buscador Ultra — Multi-proveedor</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
 <style>
-
-:root{
---accent:#4f46e5;
---accent2:#6366f1;
---bg:#f4f6fb;
---card:#ffffff;
---border:#e6e9f2;
---text:#1f2937;
---muted:#6b7280;
+:root{--accent:#0b76f4;--muted:#666}
+body{font-family:Inter,Arial,Helvetica,sans-serif;margin:0;background:#f5f7fb;color:#222}
+header{background:#fff;padding:18px 24px;box-shadow:0 2px 6px rgba(12,20,30,.06);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{margin:0;font-size:18px;flex-basis:100%;}
+.searchbar{flex:1;display:flex;gap:8px;flex-wrap:wrap}
+input[type="search"]{flex:1;padding:12px 14px;border-radius:10px;border:1px solid #e2e8f0;font-size:16px}
+select,input[type="number"]{padding:10px;border-radius:8px;border:1px solid #e2e8f0}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+main{padding:18px 24px}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
 }
 
-*{
-box-sizing:border-box;
+/* Pantallas medianas (tablets, aprox 768px) */
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 columnas */
+  }
 }
 
-body{
-font-family:Inter,system-ui;
-margin:0;
-background:var(--bg);
-color:var(--text);
+/* Pantallas pequeñas (móviles) */
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 columnas */
+  }
 }
 
-header{
-background:white;
-padding:20px 30px;
-box-shadow:0 4px 12px rgba(0,0,0,.05);
-display:flex;
-flex-wrap:wrap;
-gap:12px;
-align-items:center;
+/* Pantallas muy pequeñas */
+@media (max-width: 360px) {
+  .grid {
+    grid-template-columns: 1fr; /* 1 columna */
+  }
 }
 
-header h1{
-margin:0;
-font-size:20px;
-font-weight:700;
-width:100%;
+.card{background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(12,20,30,.06);display:flex;gap:12px;align-items:flex-start;flex-direction:column}
+.thumb{width:100%;height:200px;border-radius:8px;overflow:hidden;background:#f0f0f0;display:flex;align-items:center;justify-content:center}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.meta{flex:1;width:100%}
+.title{font-weight:700;margin-bottom:6px}
+.price{color:var(--accent);font-weight:700;margin-bottom:8px}
+.provider{background:#eef5ff;color:var(--accent);padding:4px 8px;border-radius:999px;font-size:12px;display:inline-block}
+.footer-actions{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.btn{background:var(--accent);color:white;padding:8px 10px;border-radius:8px;text-decoration:none;cursor:pointer;border:none}
+.small{font-size:13px;color:var(--muted)}
+.pager{margin-top:18px;display:flex;gap:8px;align-items:center;justify-content:center}
+
+/* Carrito */
+#carrito{position:fixed;right:0;top:0;width:350px;height:100%;background:#fff;box-shadow:-2px 0 8px rgba(0,0,0,.1);padding:18px;overflow-y:auto;transition:transform .3s ease;transform:translateX(100%);}
+#carrito.open{transform:translateX(0);}
+#carrito h2{margin-top:0}
+.cart-item{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;border-bottom:1px solid #eee;padding-bottom:8px}
+.cart-thumb{width:60px;height:60px;flex-shrink:0;overflow:hidden;border-radius:6px;background:#f0f0f0}
+.cart-thumb img{width:100%;height:100%;object-fit:cover}
+.cart-info{flex:1}
+.cart-info .title{margin:0;font-weight:600;font-size:14px}
+.cart-info .price{color:var(--accent);margin:2px 0;font-size:13px}
+.cart-remove{cursor:pointer;font-size:12px;color:red}
+#toggleCart{position:fixed;right:10px;bottom:10px;background:var(--accent);color:#fff;padding:12px 16px;border-radius:50px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+
+/* Overlay moderno */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
 }
 
-.searchbar{
-display:flex;
-flex-wrap:wrap;
-gap:10px;
-width:100%;
+.overlay.hidden {
+  display: none;
 }
 
-input[type="search"]{
-flex:1;
-padding:12px 14px;
-border-radius:10px;
-border:1px solid var(--border);
-font-size:15px;
+.overlay-box {
+  background: #fff;
+  padding: 28px 36px;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0,0,0,.25);
+  text-align: center;
+  min-width: 260px;
 }
 
-input[type="number"],
-select{
-padding:10px;
-border-radius:8px;
-border:1px solid var(--border);
-font-size:14px;
+.overlay-text {
+  font-weight: 600;
+  margin-top: 12px;
 }
 
-.controls{
-display:flex;
-flex-wrap:wrap;
-gap:10px;
+.overlay-time {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #555;
 }
 
-.btn{
-background:linear-gradient(135deg,var(--accent),var(--accent2));
-border:none;
-color:white;
-padding:10px 14px;
-border-radius:10px;
-cursor:pointer;
-font-weight:500;
-transition:.25s;
+/* Spinner */
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
 }
 
-.btn:hover{
-transform:translateY(-2px);
-box-shadow:0 6px 16px rgba(0,0,0,.15);
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
-
-main{
-padding:24px;
-}
-
-.grid{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-gap:18px;
-}
-
-.card{
-background:var(--card);
-border-radius:14px;
-padding:12px;
-box-shadow:0 8px 22px rgba(0,0,0,.05);
-transition:.3s;
-display:flex;
-flex-direction:column;
-}
-
-.card:hover{
-transform:translateY(-4px);
-box-shadow:0 14px 28px rgba(0,0,0,.12);
-}
-
-.thumb{
-width:100%;
-height:200px;
-border-radius:10px;
-overflow:hidden;
-background:#eee;
-}
-
-.thumb img{
-width:100%;
-height:100%;
-object-fit:cover;
-}
-
-.meta{
-padding-top:10px;
-display:flex;
-flex-direction:column;
-flex:1;
-}
-
-.title{
-font-weight:600;
-margin-bottom:6px;
-font-size:15px;
-}
-
-.price{
-color:var(--accent);
-font-weight:700;
-margin-bottom:8px;
-}
-
-.provider{
-background:#eef2ff;
-color:var(--accent);
-padding:3px 8px;
-border-radius:999px;
-font-size:12px;
-display:inline-block;
-}
-
-.footer-actions{
-display:flex;
-flex-wrap:wrap;
-gap:6px;
-margin-top:auto;
-align-items:center;
-}
-
-.small{
-font-size:12px;
-color:var(--muted);
-}
-
-.pager{
-margin-top:25px;
-display:flex;
-justify-content:center;
-align-items:center;
-gap:12px;
-}
-
-#carrito{
-position:fixed;
-right:0;
-top:0;
-height:100%;
-width:360px;
-background:white;
-box-shadow:-6px 0 20px rgba(0,0,0,.1);
-padding:20px;
-overflow-y:auto;
-transform:translateX(100%);
-transition:.35s;
-}
-
-#carrito.open{
-transform:translateX(0);
-}
-
-#carrito h2{
-margin-top:0;
-}
-
-.cart-item{
-display:flex;
-gap:10px;
-margin-bottom:12px;
-border-bottom:1px solid var(--border);
-padding-bottom:8px;
-}
-
-.cart-thumb{
-width:60px;
-height:60px;
-border-radius:8px;
-overflow:hidden;
-}
-
-.cart-thumb img{
-width:100%;
-height:100%;
-object-fit:cover;
-}
-
-.cart-info{
-flex:1;
-}
-
-.cart-remove{
-color:#ef4444;
-font-size:12px;
-cursor:pointer;
-}
-
-#toggleCart{
-position:fixed;
-bottom:18px;
-right:18px;
-background:linear-gradient(135deg,var(--accent),var(--accent2));
-color:white;
-padding:12px 18px;
-border-radius:50px;
-cursor:pointer;
-box-shadow:0 8px 18px rgba(0,0,0,.2);
-}
-
-.overlay{
-position:fixed;
-inset:0;
-background:rgba(0,0,0,.55);
-backdrop-filter:blur(6px);
-display:flex;
-align-items:center;
-justify-content:center;
-z-index:999;
-}
-
-.overlay.hidden{
-display:none;
-}
-
-.overlay-box{
-background:white;
-padding:30px 40px;
-border-radius:14px;
-box-shadow:0 20px 40px rgba(0,0,0,.25);
-text-align:center;
-}
-
-.spinner{
-width:44px;
-height:44px;
-border:4px solid #eee;
-border-top:4px solid var(--accent);
-border-radius:50%;
-animation:spin 1s linear infinite;
-margin:auto;
-}
-
-@keyframes spin{
-to{transform:rotate(360deg)}
-}
-
-@media(max-width:600px){
-
-header{
-padding:16px;
-}
-
-main{
-padding:16px;
-}
-
-#carrito{
-width:100%;
-}
-
-}
-
 </style>
-
 </head>
-
 <body>
 
 <header>
+  <h1>Buscador Ultra — Multi-proveedor</h1>
 
-<h1>Buscador Ultra — Multi-proveedor</h1>
+  <div class="searchbar">
+    <input id="q" type="search" placeholder="Buscar producto (ej: 'anillo cuarzo rosa')">
+    <div class="controls">
+      <select id="proveedorSelect"><option value="">Todos los proveedores</option></select>
+      <input id="minPrice" type="number" placeholder="Min $" style="width:100px">
+      <input id="maxPrice" type="number" placeholder="Max $" style="width:100px">
+      <select id="sort"><option value="relevance">Más relevante</option><option value="price_asc">Precio ↑</option><option value="price_desc">Precio ↓</option></select>
+      <button id="buscarBtn" class="btn">Buscar</button>
+      <input type="file" id="imagenInput" accept="image/*">
+      <button id="btnBuscar">Buscar coincidencias</button>
+      
+      <pre id="resultado"></pre>
 
-<div class="searchbar">
-
-<input id="q" type="search" placeholder="Buscar producto...">
-
-<div class="controls">
-
-<select id="proveedorSelect">
-<option value="">Todos</option>
-</select>
-
-<input id="minPrice" type="number" placeholder="Min $">
-
-<input id="maxPrice" type="number" placeholder="Max $">
-
-<select id="sort">
-<option value="relevance">Relevancia</option>
-<option value="price_asc">Precio ↑</option>
-<option value="price_desc">Precio ↓</option>
-</select>
-
-<button id="buscarBtn" class="btn">Buscar</button>
-
-<input type="file" id="imagenInput" accept="image/*">
-
-<button id="btnBuscar" class="btn">Buscar por Imagen</button>
-
-</div>
-
-</div>
-
+    </div>
+  </div>
 </header>
 
 <main>
-
-<div id="stats" class="small"></div>
-
-<div id="resultados" class="grid"></div>
-
-<div class="pager">
-
-<button id="prevBtn" class="btn">Anterior</button>
-
-<div id="pageInfo"></div>
-
-<button id="nextBtn" class="btn">Siguiente</button>
-
-</div>
-
+  <div id="stats" class="small" style="margin-bottom:10px"></div>
+  <div id="resultados" class="grid"></div>
+  <!-- div para mostrar resultados de búsqueda por imagen -->
+  <div id="resultados-img" style="margin-top:20px;"></div>
+  <div class="pager">
+    <button id="prevBtn">Anterior</button>
+    <div id="pageInfo"></div>
+    <button id="nextBtn">Siguiente</button>
+  </div>
 </main>
 
+<!-- Carrito -->
 <div id="carrito">
-
-<h2>🛒 Carrito</h2>
-
-<div id="cartContent"></div>
-
+  <h2>🛒 Carrito de Compras</h2>
+  <div id="cartContent"></div>
 </div>
-
 <div id="toggleCart">🛒</div>
 
+<!-- Overlay búsqueda por imagen -->
 <div id="overlayBusqueda" class="overlay hidden">
-
-<div class="overlay-box">
-
-<div class="spinner"></div>
-
-<p>Buscando coincidencias...</p>
-
-<p id="overlayTime">0s</p>
-
-</div>
-
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <div class="overlay-text">Buscando coincidencias</div>
+    <div id="overlayTime" class="overlay-time">0s</div>
+  </div>
 </div>
 
 <script>
+const API_BASE = "/api";
+let page = 1;
+let perPage = 24;
+let lastQuery = "";
+let carrito = JSON.parse(localStorage.getItem("carritoMega") || "{}");
+let relojInterval = null;
+let segundosImagen = 0;
 
-const API_BASE="/api"
+function iniciarRelojImagen() {
+  segundosImagen = 0;
 
-let page=1
+  document.getElementById("overlayBusqueda").classList.remove("hidden");
+  document.getElementById("overlayTime").textContent = "0s";
 
-let perPage=24
-
-let carrito=JSON.parse(localStorage.getItem("carritoMega")||"{}")
-
-let relojInterval=null
-
-let segundosImagen=0
-
-function iniciarRelojImagen(){
-
-segundosImagen=0
-
-document.getElementById("overlayBusqueda").classList.remove("hidden")
-
-relojInterval=setInterval(()=>{
-
-segundosImagen++
-
-document.getElementById("overlayTime").textContent=segundosImagen+"s"
-
-},1000)
-
+  relojInterval = setInterval(() => {
+    segundosImagen++;
+    document.getElementById("overlayTime").textContent =
+      `${segundosImagen}s`;
+  }, 1000);
 }
 
-function detenerRelojImagen(){
+function detenerRelojImagen() {
+  clearInterval(relojInterval);
+  relojInterval = null;
 
-clearInterval(relojInterval)
-
-document.getElementById("overlayBusqueda").classList.add("hidden")
-
+  document.getElementById("overlayBusqueda").classList.add("hidden");
 }
 
-function guardarCarrito(){
-
-localStorage.setItem("carritoMega",JSON.stringify(carrito))
-
-renderCarrito()
-
+// Escapar HTML
+function escapeHTML(str){ 
+  return str ? str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : ''; 
 }
 
+// Guardar carrito
+function guardarCarrito(){ 
+  localStorage.setItem("carritoMega", JSON.stringify(carrito));
+  renderCarrito();
+}
+
+// Renderizar carrito
 function renderCarrito(){
+  const cont = document.getElementById("cartContent");
+  cont.innerHTML = "";
+  const proveedores = Object.keys(carrito);
+  if(proveedores.length===0){ 
+    cont.innerHTML="<p>El carrito está vacío</p>"; 
+    return; 
+  }
 
-const cont=document.getElementById("cartContent")
+  proveedores.forEach(prov=>{
+    const provDiv = document.createElement("div");
+    provDiv.innerHTML = `<h3>${escapeHTML(prov)}</h3>`;
+    carrito[prov].forEach((item,index)=>{
+      const div = document.createElement("div");
+      div.className="cart-item";
+      div.innerHTML=`
+        <div class="cart-thumb"><img src="${escapeHTML(item.imagen)||'https://via.placeholder.com/60'}"></div>
+        <div class="cart-info">
+          <p class="title">${escapeHTML(item.titulo)}</p>
+          <p class="price">${escapeHTML(item.precio)}</p>
+        </div>
+        <div class="cart-remove" data-prov="${escapeHTML(prov)}" data-idx="${index}">Eliminar</div>
+      `;
+      provDiv.appendChild(div);
+    });
+    cont.appendChild(provDiv);
+  });
 
-cont.innerHTML=""
-
-for(const prov in carrito){
-
-const h=document.createElement("h3")
-
-h.textContent=prov
-
-cont.appendChild(h)
-
-carrito[prov].forEach((item,i)=>{
-
-const div=document.createElement("div")
-
-div.className="cart-item"
-
-div.innerHTML=`
-
-<div class="cart-thumb">
-
-<img src="${item.imagen}">
-
-</div>
-
-<div class="cart-info">
-
-<div>${item.titulo}</div>
-
-<div class="price">${item.precio}</div>
-
-</div>
-
-<div class="cart-remove" data-p="${prov}" data-i="${i}">Eliminar</div>
-
-`
-
-cont.appendChild(div)
-
-})
-
+  // botones eliminar
+  cont.querySelectorAll(".cart-remove").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const prov = btn.dataset.prov;
+      const idx = parseInt(btn.dataset.idx,10);
+      carrito[prov].splice(idx,1);
+      if(carrito[prov].length===0) delete carrito[prov];
+      guardarCarrito();
+    });
+  });
 }
 
-document.querySelectorAll(".cart-remove").forEach(b=>{
-
-b.onclick=()=>{
-
-const p=b.dataset.p
-
-const i=b.dataset.i
-
-carrito[p].splice(i,1)
-
-if(!carrito[p].length)delete carrito[p]
-
-guardarCarrito()
-
+// Cargar proveedores
+async function cargarProveedores(){
+  try{
+    const res = await fetch(API_BASE + "/proveedores");
+    const provs = await res.json();
+    const sel = document.getElementById("proveedorSelect");
+    provs.forEach(p=>{
+      const o = document.createElement("option");
+      o.value=p; o.textContent=p;
+      sel.appendChild(o);
+    });
+  }catch(err){
+    console.error("Error cargando proveedores:",err);
+  }
 }
 
-})
+// Buscar productos normales
+async function buscar(resetPage = true){
+  if(resetPage) page=1;
+  const q = document.getElementById("q").value.trim();
+  lastQuery = q;
+  const proveedor = document.getElementById("proveedorSelect").value;
+  const minPrice = document.getElementById("minPrice").value;
+  const maxPrice = document.getElementById("maxPrice").value;
+  const sort = document.getElementById("sort").value;
 
+  const params = new URLSearchParams();
+  if(q) params.set("q",q);
+  if(proveedor) params.set("proveedor",proveedor);
+  if(minPrice) params.set("minPrice",minPrice);
+  if(maxPrice) params.set("maxPrice",maxPrice);
+  if(sort) params.set("sort",sort);
+  params.set("page",page);
+  params.set("perPage",perPage);
+
+  document.getElementById("stats").textContent="🔎 Buscando...";
+  try{
+    const res = await fetch(API_BASE+"/buscar?"+params.toString());
+    const data = await res.json();
+
+    const cont = document.getElementById("resultados");
+    cont.innerHTML="";
+    document.getElementById("stats").textContent=`Resultados: ${data.total} — Página ${data.page}`;
+
+    data.results.forEach(item=>{
+      const div = document.createElement("div");
+      div.className="card";
+      div.innerHTML=`
+        <div class="thumb">
+          <img
+            src="${escapeHTML(item.imagenCloud || item.imagen)}"
+            class="img-busqueda"
+            data-img="${escapeHTML(item.imagenCloud || item.imagen)}"
+            alt="${escapeHTML(item.titulo)}"
+          >
+        </div>
+  
+        <div class="meta">
+          <div class="title">${escapeHTML(item.titulo)}</div>
+          <div class="price">${escapeHTML(String(item.precio ?? ""))}</div>
+          <div class="small">Proveedor: <span class="provider">${escapeHTML(item.proveedor)}</span></div>
+          <div class="footer-actions">
+            <a class="btn" href="${escapeHTML(item.url)}" target="_blank">Ir al producto</a>
+            <button class="btn addCartBtn">Agregar al carrito</button>
+            <div class="small" style="margin-left:auto">Score: ${(item.score===undefined)?"-":item.score.toFixed(3)}</div>
+          </div>
+        </div>
+      `;
+      cont.appendChild(div);
+
+      div.querySelector(".addCartBtn").addEventListener("click", ()=>{
+        if(!carrito[item.proveedor]) carrito[item.proveedor]=[];
+        carrito[item.proveedor].push({
+          titulo: item.titulo,
+          precio: item.precio,
+          imagen: item.imagenCloud || item.imagen,
+          url: item.url
+        });
+        guardarCarrito();
+      });
+    });
+
+    document.getElementById("pageInfo").textContent=`Página ${data.page} / ${Math.ceil(data.total/data.perPage)||1}`;
+  }catch(err){
+    console.error("Error buscando productos:",err);
+    document.getElementById("stats").textContent="❌ Error al buscar productos";
+  }
 }
 
-async function buscar(reset=true){
+// Mostrar resultados de búsqueda por imagen
+function mostrarResultadosImagen(resultados) {
+  const cont = document.getElementById("resultados");
+  cont.innerHTML = ""; // limpiar contenedor
+  const placeholder = "https://dummyimage.com/300x300/cccccc/000000&text=No+Image";
 
-if(reset)page=1
+  resultados.forEach(item => {
+    const imgSrc =
+    item.imagenCloud ||
+    item.imagen ||
+    item.image ||
+    item.img ||
+    placeholder;
 
-const q=document.getElementById("q").value
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <div class="thumb">
+        <img src="${escapeHTML(imgSrc)}" onerror="this.src='${placeholder}'">
+      </div>
+      <div class="meta">
+        <div class="title">${escapeHTML(item.titulo)}</div>
+        <div class="price">${escapeHTML(item.precio) || ""}</div>
+        <div class="small">Proveedor: <span class="provider">${escapeHTML(item.proveedor)}</span></div>
+        <div class="footer-actions">
+          <a class="btn" href="${escapeHTML(item.url)}" target="_blank">Ir al producto</a>
+          <button class="btn addCartBtn">Agregar al carrito</button>
+        </div>
+      </div>
+    `;
+    cont.appendChild(div);
 
-const params=new URLSearchParams()
-
-if(q)params.set("q",q)
-
-params.set("page",page)
-params.set("perPage",perPage)
-
-document.getElementById("stats").textContent="Buscando..."
-
-iniciarRelojImagen()   // ← mostrar overlay y spinner
-
-try{
-
-const r=await fetch(API_BASE+"/buscar?"+params)
-const data=await r.json()
-
-const cont=document.getElementById("resultados")
-
-cont.innerHTML=""
-
-data.results.forEach(item=>{
-
-const div=document.createElement("div")
-
-div.className="card"
-
-div.innerHTML=`
-
-<div class="thumb">
-<img src="${item.imagenCloud||item.imagen}" class="img-busqueda" data-img="${item.imagenCloud||item.imagen}">
-</div>
-
-<div class="meta">
-<div class="title">${item.titulo}</div>
-<div class="price">${item.precio}</div>
-
-<div class="small">
-Proveedor: <span class="provider">${item.proveedor}</span>
-</div>
-
-<div class="footer-actions">
-<a class="btn" target="_blank" href="${item.url}">Ir</a>
-<button class="btn add">Carrito</button>
-</div>
-
-</div>
-`
-
-cont.appendChild(div)
-
-div.querySelector(".add").onclick=()=>{
-
-if(!carrito[item.proveedor])carrito[item.proveedor]=[]
-
-carrito[item.proveedor].push(item)
-
-guardarCarrito()
-
+    // Agregar al carrito
+    div.querySelector(".addCartBtn").addEventListener("click", () => {
+      if (!carrito[item.proveedor]) carrito[item.proveedor] = [];
+      carrito[item.proveedor].push({
+        titulo: item.titulo,
+        precio: item.precio,
+        imagen: imgSrc,
+        url: item.url
+      });
+      guardarCarrito();
+    });
+  });
 }
 
-})
+// Buscar por imagen (click o input file)
+async function buscarPorImagen(imagenBlob) {
+  try {
+    const formData = new FormData();
+    formData.append("imagen", imagenBlob, "busqueda.jpg");
 
-document.getElementById("pageInfo").textContent="Página "+data.page
+    let res;
 
+    try {
+
+      // intentar servidor local primero
+      res = await fetch("http://localhost:3001/api/buscarPorImagen", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log("🟢 Usando servidor local");
+
+    } catch (err) {
+
+      console.log("🌐 Servidor local no disponible, usando API remota");
+
+      res = await fetch(API_BASE + "/buscarPorImagen", {
+        method: "POST",
+        body: formData
+      });
+
+    }
+
+    if (!res.ok) {
+      const txt = await res.text();
+      detenerRelojImagen();
+      document.getElementById("stats").textContent = txt;
+      return;
+    }
+
+    const data = await res.json();
+    detenerRelojImagen();
+
+    if (data.ok && data.resultados.length) {
+      mostrarResultadosImagen(data.resultados);
+      document.getElementById("stats").textContent =
+        `🔍 Resultados: ${data.resultados.length} — ⏱ ${segundosImagen}s`;
+    } else {
+      document.getElementById("stats").textContent = "⚠️ No se encontraron resultados";
+    }
+  } catch (err) {
+    detenerRelojImagen();
+    document.getElementById("stats").textContent = "❌ Error al buscar por imagen";
+  }
 }
-finally{
 
-detenerRelojImagen()   // ← ocultar overlay
+// Listener click en imágenes
+document.addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("img-busqueda")) return;
+  const imagenUrl = e.target.dataset.img || e.target.src;
+  if (!imagenUrl) return;
 
-}
+  iniciarRelojImagen(); // ⏱️ ARRANCA ACÁ
 
-}
+  try {
+    const imgRes = await fetch(imagenUrl);
+    const blob = await imgRes.blob();
+    await buscarPorImagen(blob);
+  } catch (err) {
+    detenerRelojImagen();
+    document.getElementById("stats").textContent = "❌ Error cargando imagen";
+  }
+});
 
-document.getElementById("buscarBtn").onclick=()=>buscar(true)
+// Listener input file
+document.getElementById("btnBuscar").addEventListener("click", async () => {
+  const fileInput = document.getElementById("imagenInput");
+  if (!fileInput.files.length) return alert("Seleccioná una imagen primero");
+  iniciarRelojImagen(); // ⏱️ ARRANCA ACÁ
+  await buscarPorImagen(fileInput.files[0]);
+});
 
-document.getElementById("prevBtn").onclick=()=>{if(page>1){page--;buscar(false)}}
+// Botones de búsqueda normal
+document.getElementById("buscarBtn").addEventListener("click", ()=>buscar(true));
+document.getElementById("q").addEventListener("keydown", e=>{ if(e.key==='Enter') buscar(true); });
+document.getElementById("prevBtn").addEventListener("click", ()=>{ if(page>1){ page--; buscar(false);} });
+document.getElementById("nextBtn").addEventListener("click", ()=>{ page++; buscar(false);} );
 
-document.getElementById("nextBtn").onclick=()=>{page++;buscar(false)}
+// Toggle carrito
+document.getElementById("toggleCart").addEventListener("click", ()=>{ document.getElementById("carrito").classList.toggle("open"); });
 
-document.getElementById("toggleCart").onclick=()=>{
-
-document.getElementById("carrito").classList.toggle("open")
-
-}
-
-buscar()
-
-renderCarrito()
-
+(async ()=>{
+  await cargarProveedores();
+  buscar(true);
+  renderCarrito();
+})();
 </script>
 
 </body>
-
 </html>
