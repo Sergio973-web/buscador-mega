@@ -1,15 +1,19 @@
-// scripts/generarEmbeddingsImagen.js
 import fs from "fs";
 import path from "path";
 import OpenAI from "openai";
+import { fileURLToPath } from "url";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Fix rutas en Node (ESM)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Archivos
-const INPUT_FILE = "../productos.json";
-const OUTPUT_DIR = "../embeddings";
+const INPUT_FILE = path.join(__dirname, "../productos.json");
+const OUTPUT_DIR = path.join(__dirname, "../embeddings");
 const OUTPUT_FILE = path.join(OUTPUT_DIR, "embeddings.json");
 
 // Límite por ejecución (para no sobrecargar)
