@@ -10,13 +10,12 @@ const productos = JSON.parse(fs.readFileSync(productosPath, "utf-8"));
 function parsePrecio(precioStr) {
   if (precioStr === null || precioStr === undefined) return null;
 
-  // Convertir a string para evitar TypeError
   precioStr = String(precioStr);
 
   let only = precioStr
-    .replace(/[^\d,.\-]/g, "")            // quitar cualquier caracter que no sea dígito, coma, punto o guion
-    .replace(/\.(?=\d{3,})/g, "")         // quitar puntos de miles
-    .replace(",", ".");                    // reemplazar coma decimal por punto
+    .replace(/[^\d,.\-]/g, "")
+    .replace(/\.(?=\d{3,})/g, "")
+    .replace(",", ".");
 
   const n = parseFloat(only);
   return isFinite(n) ? n : null;
@@ -27,13 +26,12 @@ const stopwords = new Set([
   "de","en","para","con","y","el","la","los","las","un","una","unos","unas"
 ]);
 
-// --- Normalizaciones simples ---
+// --- Normalizaciones ---
 const normalizaciones = {
   "ojotigre": "ojo de tigre",
   "taroot": "tarot"
 };
 
-// --- Normalizar palabra ---
 function normalizar(word) {
   word = word.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (normalizaciones[word]) return normalizaciones[word];
@@ -41,21 +39,21 @@ function normalizar(word) {
   return word;
 }
 
-// --- Boost por palabras importantes ---
+// --- Boost ---
 function calcularBoost(palabrasQuery, titulo) {
   const tituloNorm = titulo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   let boost = 0;
 
   palabrasQuery.forEach((w, i) => {
-    if (tituloNorm.includes(w)) boost += 10;          // palabra presente
-    if (tituloNorm.indexOf(w) === tituloNorm.indexOf(palabrasQuery[i])) boost += 5; // mismo orden
-    if (i === palabrasQuery.length - 1 && tituloNorm.includes(w)) boost += 3;      // última palabra
+    if (tituloNorm.includes(w)) boost += 10;
+    if (tituloNorm.indexOf(w) === tituloNorm.indexOf(palabrasQuery[i])) boost += 5;
+    if (i === palabrasQuery.length - 1 && tituloNorm.includes(w)) boost += 3;
   });
 
   return boost;
 }
 
-// --- Index Fuse.js para coincidencias difusas ---
+// --- Fuse ---
 const fuse = new Fuse(productos, {
   keys: ["titulo"],
   threshold: 0.4,
@@ -63,22 +61,33 @@ const fuse = new Fuse(productos, {
   minMatchCharLength: 2
 });
 
-// --- Handler principal ---
+// --- HANDLER ---
 export default function handler(req, res) {
   const query = (req.query.q || "").trim();
   const minPrice = req.query.minPrice ? parseFloat(req.query.minPrice) : null;
   const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice) : null;
+
   const proveedorQ = req.query.proveedor
     ? String(req.query.proveedor).split(",").map(s => s.trim()).filter(Boolean)
     : [];
+
+  const sort = req.query.sort || "";
+
   const page = Math.max(1, parseInt(req.query.page || "1", 10));
   const perPage = Math.min(100, Math.max(5, parseInt(req.query.perPage || "24", 10)));
 
-  let results = productos.map(p => ({ ...p, precioNum: parsePrecio(p.precio) }));
+  let results = productos.map(p => ({
+    ...p,
+    precioNum: parsePrecio(p.precio)
+  }));
 
-  // --- FILTRO POR PROVEEDOR ---
+  // --- FILTRO POR PROVEEDOR (FIX ROBUSTO) ---
   if (proveedorQ.length) {
-    results = results.filter(p => proveedorQ.includes(p.proveedor));
+    const provNorm = proveedorQ.map(p => p.toLowerCase().trim());
+
+    results = results.filter(p =>
+      provNorm.includes(String(p.proveedor).toLowerCase().trim())
+    );
   }
 
   // --- FILTRO POR PRECIO ---
@@ -87,19 +96,25 @@ export default function handler(req, res) {
     !(maxPrice !== null && (p.precioNum === null || p.precioNum > maxPrice))
   );
 
+  // --- BÚSQUEDA ---
   if (query) {
     const palabrasQuery = query.split(/\s+/)
       .map(normalizar)
       .filter(w => w && !stopwords.has(w));
 
-    // --- Coincidencias exactas (todas las palabras presentes) ---
     let exactMatches = results.filter(p =>
       palabrasQuery.every(w => p.titulo.toLowerCase().includes(w))
-    ).map(p => ({ ...p, score: 100 + calcularBoost(palabrasQuery, p.titulo) }));
+    ).map(p => ({
+      ...p,
+      score: 100 + calcularBoost(palabrasQuery, p.titulo)
+    }));
 
-    // --- Búsqueda difusa para el resto ---
     let fuzzyResults = fuse.search(palabrasQuery.join(" "))
-      .map(r => ({ ...r.item, score: r.score ? 50 + 1 / r.score : 50 }))
+      .map(r => ({
+        ...r.item,
+        precioNum: parsePrecio(r.item.precio),
+        score: r.score ? 50 + 1 / r.score : 50
+      }))
       .filter(r => !exactMatches.some(em => em.titulo === r.titulo));
 
     results = [...exactMatches, ...fuzzyResults];
@@ -107,13 +122,23 @@ export default function handler(req, res) {
     results = results.map(p => ({ ...p, score: 0 }));
   }
 
-  // --- Orden final: stock primero, luego score ---
-  results.sort((a, b) => {
-    if (a.stock && !b.stock) return -1;
-    if (!a.stock && b.stock) return 1;
-    return (b.score || 0) - (a.score || 0);
-  });
+  // --- ORDENAMIENTO (FIX CLAVE) ---
+  if (sort === "precioAsc") {
+    results.sort((a, b) => (a.precioNum ?? Infinity) - (b.precioNum ?? Infinity));
+  } else if (sort === "precioDesc") {
+    results.sort((a, b) => (b.precioNum ?? -Infinity) - (a.precioNum ?? -Infinity));
+  } else if (sort === "titulo") {
+    results.sort((a, b) => (a.titulo || "").localeCompare(b.titulo || ""));
+  } else {
+    // default inteligente
+    results.sort((a, b) => {
+      if (a.stock && !b.stock) return -1;
+      if (!a.stock && b.stock) return 1;
+      return (b.score || 0) - (a.score || 0);
+    });
+  }
 
+  // --- PAGINADO ---
   const total = results.length;
   const start = (page - 1) * perPage;
   const end = start + perPage;
