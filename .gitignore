@@ -29,7 +29,7 @@ productos_embeddings.json
 
 # Ignorar scripts locales (no producción)
 scripts/
-
+tmp/
 # Ignorar archivos de entorno
 .env
 .env*
