@@ -28,7 +28,6 @@ productos_embeddings.json
 .vscode/
 
 # Ignorar scripts locales (no producción)
-scripts/
 tmp/
 # Ignorar archivos de entorno
 .env
