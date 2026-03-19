@@ -8,6 +8,9 @@ local-server.js
 *.log
 *.tmp
 *.bak
+*.db
+*.db-shm
+*.db-wal
 
 # Ignorar bases y datasets (pero permitir productos.json)
 Imagenes_productos_proveedores/
