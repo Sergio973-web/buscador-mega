@@ -16,6 +16,7 @@ app.use(
   fileUpload({
     useTempFiles: true,
     tempFileDir: "./tmp",
+    createParentPath: true,
   })
 );
 
@@ -27,14 +28,14 @@ const openai = new OpenAI({
 });
 
 // ===============================
-// SQLITE (singleton)
+// SQLITE
 // ===============================
 const db = new Database("embeddings.db");
 
 console.log("🗄️ Conectando SQLite...");
 
 // ===============================
-// CACHE EN MEMORIA (CRÍTICO)
+// CACHE
 // ===============================
 let PRODUCTS_CACHE = [];
 
@@ -58,11 +59,10 @@ function loadProducts() {
   console.log(`✅ Productos en memoria: ${PRODUCTS_CACHE.length}`);
 }
 
-// cargar 1 vez al inicio
 loadProducts();
 
 // ===============================
-// COSENO
+// COSINE SIMILARITY
 // ===============================
 function cosineSimilarity(a, b) {
   let dot = 0;
@@ -75,11 +75,13 @@ function cosineSimilarity(a, b) {
     normB += b[i] * b[i];
   }
 
+  if (normA === 0 || normB === 0) return 0;
+
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 // ===============================
-// SEARCH POR IMAGEN
+// SEARCH IMAGE
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
   try {
@@ -94,34 +96,45 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     const file = req.files.imagen;
 
     const buffer = fs.readFileSync(file.tempFilePath);
+
+    // limpiar temp
+    fs.unlinkSync(file.tempFilePath);
+
     const base64 = buffer.toString("base64");
     const imageUrl = `data:image/jpeg;base64,${base64}`;
 
     console.log("🔎 Vision AI...");
 
     // ===============================
-    // 1. VISION
+    // VISION (robusto)
     // ===============================
-    const vision = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: "Describe este producto con precisión: tipo, material, uso.",
-            },
-            {
-              type: "input_image",
-              image_url: imageUrl,
-            },
-          ],
-        },
-      ],
-    });
+    let descripcion = "";
 
-    const descripcion = (vision.output_text || "").trim();
+    try {
+      const vision = await openai.responses.create({
+        model: "gpt-4.1-mini",
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "Describe este producto con precisión: tipo, material, uso.",
+              },
+              {
+                type: "input_image",
+                image_url: imageUrl,
+              },
+            ],
+          },
+        ],
+      });
+
+      descripcion = (vision.output_text || "").trim();
+    } catch (e) {
+      console.error("❌ Vision error:", e.message);
+      return res.status(500).json({ error: "Vision failed" });
+    }
 
     if (!descripcion) {
       return res.json({ ok: false, resultados: [] });
@@ -130,7 +143,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     console.log("🧠 Query:", descripcion);
 
     // ===============================
-    // 2. EMBEDDING QUERY
+    // EMBEDDINGS
     // ===============================
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
@@ -140,7 +153,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     const queryEmbedding = emb.data[0].embedding;
 
     // ===============================
-    // 3. SEARCH
+    // SEARCH
     // ===============================
     const resultados = [];
 
@@ -151,21 +164,16 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
       const score = cosineSimilarity(queryEmbedding, p.embedding);
 
-      // threshold ajustable
       if (score < 0.15) continue;
 
       resultados.push({
         ...p,
         score,
       });
-
-      if (i % 2000 === 0) {
-        console.log(`⏳ procesados ${i}/${PRODUCTS_CACHE.length}`);
-      }
     }
 
     // ===============================
-    // 4. RANKING
+    // RANKING
     // ===============================
     resultados.sort((a, b) => b.score - a.score);
 
@@ -187,6 +195,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       total: top.length,
       resultados: top,
     });
+
   } catch (err) {
     console.error("🔥 ERROR:", err.message);
 
@@ -211,7 +220,7 @@ app.get("/api/status", (req, res) => {
 });
 
 // ===============================
-// RELOAD CACHE (IMPORTANTE)
+// RELOAD CACHE
 // ===============================
 app.get("/api/reload", (req, res) => {
   loadProducts();

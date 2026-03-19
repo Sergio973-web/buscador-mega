@@ -1,25 +1,43 @@
-# Ignorar node_modules
+# ===============================
+# DEPENDENCIAS
+# ===============================
 node_modules/
 
-# Servidor local para embeddings (no producción)
+# ===============================
+# SERVIDOR LOCAL (NO PRODUCCIÓN)
+# ===============================
 local-server.js
+tmp/
 
-# Ignorar archivos grandes o temporales
+# ===============================
+# LOGS
+# ===============================
 *.log
+
+# ===============================
+# ARCHIVOS TEMPORALES
+# ===============================
 *.tmp
 *.bak
-*.db
-*.db-shm
-*.db-wal
 
-# Ignorar bases y datasets (pero permitir productos.json)
+# ===============================
+# SQLITE LOCAL (IMPORTANTE)
+# ===============================
+embeddings.db
+embeddings.db-shm
+embeddings.db-wal
+
+# ===============================
+# DATASETS LOCALES
+# ===============================
 Imagenes_productos_proveedores/
 bases/
-
-# Ignorar embeddings locales
 embeddings/
 
-# Ignorar scripts que no van a Vercel
+# ===============================
+# SCRIPTS LOCALES
+# ===============================
+scripts/
 descargar_imagenes.js
 exportar_base_datos_a_json.js
 listar_tablas.js
@@ -27,27 +45,26 @@ generarProductos.js
 servidor_mega.js
 check_proveedores.js
 productos_embeddings.json
-# Ignorar carpetas de desarrollo
-.vscode/
 
-# Ignorar scripts locales (no producción)
-tmp/
-# Ignorar archivos de entorno
+# ===============================
+# ENTORNO
+# ===============================
 .env
 .env*
 .env.*
 
-# Ignorar archivos batch locales
+# ===============================
+# WINDOWS / DEV
+# ===============================
+.vscode/
 *.bat
 
-# PERMITIR SOLO LO NECESARIO
-!index.html
+# ===============================
+# PERMITIR LO NECESARIO PARA VERCEL
+# ===============================
 !api/
 !api/**
-!utils/
-!utils/**
-!productos.json
+!index.html
 !package.json
 !package-lock.json
-
-.vercel
+!productos.json

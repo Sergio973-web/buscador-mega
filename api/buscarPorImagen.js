@@ -1,86 +1,78 @@
-import formidable from "formidable";
-import fs from "fs";
-import path from "path";
-
 export const config = {
   api: { bodyParser: false },
 };
 
-const EMBEDDINGS_PATH = path.join(process.cwd(), "embeddings", "embeddings.json");
+const API_LOCAL =
+  "https://homopterous-cirrose-estella.ngrok-free.dev/api/buscarPorImagen";
 
 export default async function handler(req, res) {
+  console.log("📌 Proxy /api/buscarPorImagen");
 
-  console.log("📌 Endpoint /api/buscarPorImagen llamado");
+  // 🚫 evitar cache (evita 304 / respuestas viejas)
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Método no permitido" });
   }
 
-  const embeddingsDisponibles = fs.existsSync(EMBEDDINGS_PATH);
-
   try {
-    const form = formidable({ multiples: false });
+    // ===============================
+    // 1. LEER STREAM COMPLETO
+    // ===============================
+    const chunks = [];
 
-    form.parse(req, async (err, fields, files) => {
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
 
-      if (err) {
-        console.error("❌ Error formidable:", err);
-        return res.status(500).json({ error: "Error parseando imagen" });
-      }
+    const bodyBuffer = Buffer.concat(chunks);
 
-      let file = files.imagen;
-      if (!file) {
-        return res.status(400).json({ error: "No se recibió imagen" });
-      }
+    // ===============================
+    // 2. FORWARD A NGROK
+    // ===============================
+    const response = await fetch(API_LOCAL, {
+      method: "POST",
+      headers: {
+        // 🔥 CRÍTICO: mantener multipart correcto
+        "Content-Type": req.headers["content-type"] || "",
 
-      if (Array.isArray(file)) file = file[0];
-
-      // Si existen embeddings locales
-      if (embeddingsDisponibles) {
-
-        console.log("✅ Usando embeddings locales");
-
-        const { buscarImagenSimilar } = await import("./utils/compareImages.js");
-
-        const localUrl = `file://${file.filepath}`;
-
-        const resultados = await buscarImagenSimilar(localUrl);
-
-        return res.json({
-          ok: true,
-          resultados
-        });
-
-      }
-
-      // Si NO existen embeddings → reenviar a servidor local
-      console.log("⚠️ Embeddings no encontrados. Redirigiendo a localhost");
-
-      const formData = new FormData();
-      const buffer = fs.readFileSync(file.filepath);
-
-      formData.append("imagen", new Blob([buffer]), "busqueda.jpg");
-
-      const response = await fetch("http://localhost:3001/api/buscarPorImagen", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await response.json();
-
-      return res.json(data);
-
+        // 🔥 evita pantalla ngrok warning
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: bodyBuffer,
     });
 
-  } catch (error) {
+    const text = await response.text();
 
-    console.error("🔥 Error inesperado:", error);
+    // ===============================
+    // 3. VALIDACIÓN SEGURA JSON
+    // ===============================
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error("❌ Respuesta no JSON del backend local:");
+      console.error(text);
+
+      return res.status(500).json({
+        error: "Respuesta inválida del servidor local",
+        raw: text,
+      });
+    }
+
+    return res.status(200).json(data);
+  } catch (err) {
+    console.error("🔥 Error proxy:", err);
 
     return res.status(500).json({
-      error: "Error interno",
-      detalle: error.message
+      error: "No se pudo conectar con el servidor de embeddings",
+      detalle: err.message,
     });
-
   }
-
 }
