@@ -1,11 +1,10 @@
 import express from "express";
 import fs from "fs";
-import path from "path";
 import cors from "cors";
-import 'dotenv/config';
-
+import "dotenv/config";
 import fileUpload from "express-fileupload";
 import OpenAI from "openai";
+import Database from "better-sqlite3";
 
 const app = express();
 const PORT = 3001;
@@ -13,22 +12,57 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// Middleware para subir archivos
-app.use(fileUpload({
-  useTempFiles: true,
-  tempFileDir: "./tmp"
-}));
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-const EMBEDDINGS_PATH = path.join(process.cwd(), "embeddings", "embeddings.json");
-
-let productos = [];
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: "./tmp",
+  })
+);
 
 // ===============================
-// Similitud coseno
+// OPENAI
+// ===============================
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// ===============================
+// SQLITE (singleton)
+// ===============================
+const db = new Database("embeddings.db");
+
+console.log("🗄️ Conectando SQLite...");
+
+// ===============================
+// CACHE EN MEMORIA (CRÍTICO)
+// ===============================
+let PRODUCTS_CACHE = [];
+
+function loadProducts() {
+  console.log("📦 Cargando embeddings desde SQLite...");
+
+  const rows = db.prepare("SELECT * FROM embeddings").all();
+
+  PRODUCTS_CACHE = rows.map((r) => ({
+    url: r.url,
+    titulo: r.titulo,
+    titulo_original: r.titulo_original,
+    descripcion: r.descripcion,
+    imagen: r.imagenCloud || r.imagen || null,
+    precio: r.precio || null,
+    categoria: r.categoria || null,
+    proveedor: r.proveedor || null,
+    embedding: r.embedding ? JSON.parse(r.embedding) : null,
+  }));
+
+  console.log(`✅ Productos en memoria: ${PRODUCTS_CACHE.length}`);
+}
+
+// cargar 1 vez al inicio
+loadProducts();
+
+// ===============================
+// COSENO
 // ===============================
 function cosineSimilarity(a, b) {
   let dot = 0;
@@ -45,148 +79,149 @@ function cosineSimilarity(a, b) {
 }
 
 // ===============================
-// Cargar embeddings
-// ===============================
-function cargarEmbeddings() {
-
-  console.log("📦 Cargando embeddings...");
-
-  if (!fs.existsSync(EMBEDDINGS_PATH)) {
-    console.error("❌ embeddings.json no encontrado");
-    process.exit(1);
-  }
-
-  const raw = fs.readFileSync(EMBEDDINGS_PATH, "utf8");
-  productos = JSON.parse(raw);
-
-  console.log("✅ Embeddings cargados:", productos.length);
-}
-
-// ===============================
-// Endpoint búsqueda por imagen
+// SEARCH POR IMAGEN
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
-
   try {
+    console.log("\n===============================");
+    console.log("📥 REQUEST IMAGEN");
+    console.log("===============================");
 
-    console.log("📥 Request recibida");
-
-    if (!req.files || !req.files.imagen) {
-      console.log("⚠️ No se recibió imagen");
+    if (!req.files?.imagen) {
       return res.status(400).json({ error: "No se recibió imagen" });
     }
 
     const file = req.files.imagen;
 
-    console.log("🖼 Imagen recibida:", file.name);
-
-    // leer archivo
     const buffer = fs.readFileSync(file.tempFilePath);
-
-    // convertir a base64
     const base64 = buffer.toString("base64");
-
-    // crear data url
     const imageUrl = `data:image/jpeg;base64,${base64}`;
 
-    console.log("🔎 Analizando imagen base64");
+    console.log("🔎 Vision AI...");
 
-    // 1️⃣ GPT Vision describe el producto
+    // ===============================
+    // 1. VISION
+    // ===============================
     const vision = await openai.responses.create({
       model: "gpt-4.1-mini",
-      input: [{
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: "Describe este producto brevemente indicando tipo, material y uso."
-          },
-          {
-            type: "input_image",
-            image_url: imageUrl
-          }
-        ]
-      }]
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Describe este producto con precisión: tipo, material, uso.",
+            },
+            {
+              type: "input_image",
+              image_url: imageUrl,
+            },
+          ],
+        },
+      ],
     });
 
     const descripcion = (vision.output_text || "").trim();
 
-    console.log("🧠 Descripción:", descripcion);
-
     if (!descripcion) {
-      return res.json({ resultados: [] });
+      return res.json({ ok: false, resultados: [] });
     }
 
-    // 2️⃣ Crear embedding
+    console.log("🧠 Query:", descripcion);
+
+    // ===============================
+    // 2. EMBEDDING QUERY
+    // ===============================
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
-      input: descripcion
+      input: descripcion,
     });
 
     const queryEmbedding = emb.data[0].embedding;
 
-    // 3️⃣ Comparar con productos
-    const resultados = productos.map(p => ({
-      ...p,
-      score: p.embedding ? cosineSimilarity(queryEmbedding, p.embedding) : 0
-    }));
+    // ===============================
+    // 3. SEARCH
+    // ===============================
+    const resultados = [];
 
+    for (let i = 0; i < PRODUCTS_CACHE.length; i++) {
+      const p = PRODUCTS_CACHE[i];
+
+      if (!p.embedding) continue;
+
+      const score = cosineSimilarity(queryEmbedding, p.embedding);
+
+      // threshold ajustable
+      if (score < 0.15) continue;
+
+      resultados.push({
+        ...p,
+        score,
+      });
+
+      if (i % 2000 === 0) {
+        console.log(`⏳ procesados ${i}/${PRODUCTS_CACHE.length}`);
+      }
+    }
+
+    // ===============================
+    // 4. RANKING
+    // ===============================
     resultados.sort((a, b) => b.score - a.score);
 
-    // 4️⃣ Top resultados
-    const top = resultados.slice(0, 10).map(r => ({
+    const top = resultados.slice(0, 10).map((r) => ({
       titulo: r.titulo,
       descripcion: r.descripcion,
-      imagen: r.imagen || r.imagenCloud,
+      imagen: r.imagen,
       precio: r.precio,
       proveedor: r.proveedor,
       url: r.url,
-      score: Number(r.score.toFixed(4))
+      score: Number(r.score.toFixed(4)),
     }));
 
-    console.log("🏆 Resultados:", top.length);
+    console.log("🏆 TOP listo");
 
     res.json({
       ok: true,
+      descripcion,
       total: top.length,
-      resultados: top
+      resultados: top,
     });
-
   } catch (err) {
-
-    console.error("🔥 Error:", err);
+    console.error("🔥 ERROR:", err.message);
 
     res.status(500).json({
       error: "Error procesando imagen",
-      detalle: err.message
+      detalle: err.message,
     });
-
   }
-
 });
 
 // ===============================
-// Endpoints de control
+// STATUS
 // ===============================
-
-app.get("/ping", (req, res) => {
-  res.json({ ok: true });
-});
-
 app.get("/api/status", (req, res) => {
+  const count = db.prepare("SELECT COUNT(*) as c FROM embeddings").get();
+
   res.json({
     estado: "ok",
-    productos: productos.length
+    embeddings: count.c,
+    cache: PRODUCTS_CACHE.length,
   });
 });
 
 // ===============================
-// Inicio servidor
+// RELOAD CACHE (IMPORTANTE)
 // ===============================
+app.get("/api/reload", (req, res) => {
+  loadProducts();
+  res.json({ ok: true, reloaded: PRODUCTS_CACHE.length });
+});
 
-cargarEmbeddings();
-
+// ===============================
+// START
+// ===============================
 app.listen(PORT, () => {
-  console.log("🚀 Servidor local activo");
+  console.log("🚀 Servidor activo");
   console.log(`📡 http://localhost:${PORT}`);
 });
