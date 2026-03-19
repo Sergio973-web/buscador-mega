@@ -21,13 +21,6 @@ tmp/
 *.bak
 
 # ===============================
-# SQLITE LOCAL (IMPORTANTE)
-# ===============================
-embeddings.db
-embeddings.db-shm
-embeddings.db-wal
-
-# ===============================
 # DATASETS LOCALES
 # ===============================
 Imagenes_productos_proveedores/
@@ -60,11 +53,8 @@ productos_embeddings.json
 *.bat
 
 # ===============================
-# PERMITIR LO NECESARIO PARA VERCEL
+# SQLITE (SOLO ARCHIVOS TEMPORALES, NO LA DB PRINCIPAL)
 # ===============================
-!api/
-!api/**
-!index.html
-!package.json
-!package-lock.json
-!productos.json
+embeddings.db-shm
+embeddings.db-wal
+embeddings.db
