@@ -36,7 +36,7 @@ function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
 
-    db = new Database("embeddings.db");
+    db = new Database("/app/embeddings.db");
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS embeddings (
