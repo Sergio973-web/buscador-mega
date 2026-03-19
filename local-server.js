@@ -28,11 +28,38 @@ const openai = new OpenAI({
 });
 
 // ===============================
-// SQLITE
+// SQLITE SAFE INIT
 // ===============================
-const db = new Database("embeddings.db");
+let db = null;
 
-console.log("🗄️ Conectando SQLite...");
+function initDB() {
+  try {
+    console.log("🗄️ Conectando SQLite...");
+
+    db = new Database("embeddings.db");
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS embeddings (
+        id INTEGER PRIMARY KEY,
+        url TEXT,
+        titulo TEXT,
+        titulo_original TEXT,
+        descripcion TEXT,
+        imagen TEXT,
+        imagenCloud TEXT,
+        precio TEXT,
+        categoria TEXT,
+        proveedor TEXT,
+        embedding TEXT
+      );
+    `);
+
+    console.log("✅ SQLite listo");
+  } catch (err) {
+    console.error("❌ SQLite error:", err.message);
+    db = null;
+  }
+}
 
 // ===============================
 // CACHE
@@ -40,25 +67,40 @@ console.log("🗄️ Conectando SQLite...");
 let PRODUCTS_CACHE = [];
 
 function loadProducts() {
-  console.log("📦 Cargando embeddings desde SQLite...");
+  try {
+    if (!db) {
+      console.log("⚠️ DB no disponible, cache vacío");
+      PRODUCTS_CACHE = [];
+      return;
+    }
 
-  const rows = db.prepare("SELECT * FROM embeddings").all();
+    console.log("📦 Cargando embeddings...");
 
-  PRODUCTS_CACHE = rows.map((r) => ({
-    url: r.url,
-    titulo: r.titulo,
-    titulo_original: r.titulo_original,
-    descripcion: r.descripcion,
-    imagen: r.imagenCloud || r.imagen || null,
-    precio: r.precio || null,
-    categoria: r.categoria || null,
-    proveedor: r.proveedor || null,
-    embedding: r.embedding ? JSON.parse(r.embedding) : null,
-  }));
+    const rows = db.prepare("SELECT * FROM embeddings").all();
 
-  console.log(`✅ Productos en memoria: ${PRODUCTS_CACHE.length}`);
+    PRODUCTS_CACHE = rows.map((r) => ({
+      url: r.url,
+      titulo: r.titulo,
+      titulo_original: r.titulo_original,
+      descripcion: r.descripcion,
+      imagen: r.imagenCloud || r.imagen || null,
+      precio: r.precio || null,
+      categoria: r.categoria || null,
+      proveedor: r.proveedor || null,
+      embedding: r.embedding ? JSON.parse(r.embedding) : null,
+    }));
+
+    console.log(`✅ Productos en memoria: ${PRODUCTS_CACHE.length}`);
+  } catch (err) {
+    console.error("❌ loadProducts error:", err.message);
+    PRODUCTS_CACHE = [];
+  }
 }
 
+// ===============================
+// INIT STARTUP
+// ===============================
+initDB();
 loadProducts();
 
 // ===============================
@@ -85,29 +127,17 @@ function cosineSimilarity(a, b) {
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
   try {
-    console.log("\n===============================");
-    console.log("📥 REQUEST IMAGEN");
-    console.log("===============================");
-
     if (!req.files?.imagen) {
       return res.status(400).json({ error: "No se recibió imagen" });
     }
 
     const file = req.files.imagen;
-
     const buffer = fs.readFileSync(file.tempFilePath);
-
-    // limpiar temp
     fs.unlinkSync(file.tempFilePath);
 
     const base64 = buffer.toString("base64");
     const imageUrl = `data:image/jpeg;base64,${base64}`;
 
-    console.log("🔎 Vision AI...");
-
-    // ===============================
-    // VISION (robusto)
-    // ===============================
     let descripcion = "";
 
     try {
@@ -140,11 +170,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       return res.json({ ok: false, resultados: [] });
     }
 
-    console.log("🧠 Query:", descripcion);
-
-    // ===============================
-    // EMBEDDINGS
-    // ===============================
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: descripcion,
@@ -152,9 +177,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const queryEmbedding = emb.data[0].embedding;
 
-    // ===============================
-    // SEARCH
-    // ===============================
     const resultados = [];
 
     for (let i = 0; i < PRODUCTS_CACHE.length; i++) {
@@ -166,15 +188,9 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
       if (score < 0.15) continue;
 
-      resultados.push({
-        ...p,
-        score,
-      });
+      resultados.push({ ...p, score });
     }
 
-    // ===============================
-    // RANKING
-    // ===============================
     resultados.sort((a, b) => b.score - a.score);
 
     const top = resultados.slice(0, 10).map((r) => ({
@@ -186,8 +202,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       url: r.url,
       score: Number(r.score.toFixed(4)),
     }));
-
-    console.log("🏆 TOP listo");
 
     res.json({
       ok: true,
@@ -207,16 +221,33 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 });
 
 // ===============================
-// STATUS
+// STATUS SAFE
 // ===============================
 app.get("/api/status", (req, res) => {
-  const count = db.prepare("SELECT COUNT(*) as c FROM embeddings").get();
+  try {
+    if (!db) {
+      return res.json({
+        estado: "warning",
+        embeddings: 0,
+        cache: PRODUCTS_CACHE.length,
+        db: "no disponible",
+      });
+    }
 
-  res.json({
-    estado: "ok",
-    embeddings: count.c,
-    cache: PRODUCTS_CACHE.length,
-  });
+    const count = db.prepare("SELECT COUNT(*) as c FROM embeddings").get();
+
+    res.json({
+      estado: "ok",
+      embeddings: count.c,
+      cache: PRODUCTS_CACHE.length,
+    });
+
+  } catch (err) {
+    res.json({
+      estado: "error",
+      error: err.message,
+    });
+  }
 });
 
 // ===============================
@@ -228,9 +259,9 @@ app.get("/api/reload", (req, res) => {
 });
 
 // ===============================
-// START
+// START SERVER
 // ===============================
 app.listen(PORT, () => {
   console.log("🚀 Servidor activo");
-  console.log(`📡 http://localhost:${PORT}`);
+  console.log(`📡 Puerto: ${PORT}`);
 });
