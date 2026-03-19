@@ -3,7 +3,7 @@ export const config = {
 };
 
 const API_LOCAL =
-  "https://homopterous-cirrose-estella.ngrok-free.dev/api/buscarPorImagen";
+  "https://buscador-mega-production.up.railway.app/api/buscarPorImagen";
 
 export default async function handler(req, res) {
   console.log("📌 Proxy /api/buscarPorImagen");
