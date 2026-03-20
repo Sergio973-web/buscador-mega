@@ -214,35 +214,74 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const results = [];
 
-    // 🔥 STREAM DIRECTO (SIN CACHE)
-    for (const row of db.prepare("SELECT * FROM embeddings").iterate()) {
+    const stmt = db.prepare("SELECT * FROM embeddings LIMIT 500");
+
+    const MAX_RESULTS = 10;
+    const MIN_SCORE = 0.15;
+
+    const results = [];
+
+    for (const row of stmt.iterate()) {
+
       if (!row.embedding) continue;
 
       let embedding;
+
       try {
         embedding = JSON.parse(row.embedding);
       } catch {
         continue;
       }
 
+      if (!Array.isArray(embedding)) continue;
       if (embedding.length !== queryEmbedding.length) continue;
 
       const score = cosineSimilarity(queryEmbedding, embedding);
-      if (score < 0.15) continue;
 
-      results.push({
-        url: row.url,
-        titulo: row.titulo,
-        descripcion: row.descripcion,
-        imagen: row.imagenCloud || row.imagen || null,
-        precio: row.precio,
-        categoria: row.categoria,
-        proveedor: row.proveedor,
-        score,
-      });
+      // 🔥 filtra ANTES de guardar
+      if (score < MIN_SCORE) continue;
+
+      // 🔥 inserta ordenado (evita sort final pesado)
+      if (results.length < MAX_RESULTS) {
+        results.push({
+          url: row.url,
+          titulo: row.titulo,
+          descripcion: row.descripcion,
+          imagen: row.imagenCloud || row.imagen || null,
+          precio: row.precio,
+          categoria: row.categoria,
+          proveedor: row.proveedor,
+          score,
+        });
+
+        // mantener ordenado pequeño (evita sort final)
+        results.sort((a, b) => b.score - a.score);
+
+      } else {
+        // reemplaza solo si es mejor que el peor
+        if (score > results[results.length - 1].score) {
+          results[results.length - 1] = {
+            url: row.url,
+            titulo: row.titulo,
+            descripcion: row.descripcion,
+            imagen: row.imagenCloud || row.imagen || null,
+            precio: row.precio,
+            categoria: row.categoria,
+            proveedor: row.proveedor,
+            score,
+          };
+
+          results.sort((a, b) => b.score - a.score);
+        }
+      }
+
+      // 🔥 corte duro extra por seguridad
+      if (process.memoryUsage().heapUsed > 400 * 1024 * 1024) {
+        console.log("⚠️ Memory limit reached, breaking early");
+        break;
+      }
     }
 
-    results.sort((a, b) => b.score - a.score);
 
     res.json({
       ok: true,
