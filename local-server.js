@@ -24,7 +24,7 @@ app.use(
 );
 
 // ===============================
-// GLOBAL ERROR LOGGING (CRASH DEBUG)
+// ERROR LOGGING
 // ===============================
 process.on("uncaughtException", (err) => {
   console.error("💥 uncaughtException:", err);
@@ -42,18 +42,9 @@ const openai = new OpenAI({
 });
 
 // ===============================
-// SQLITE INIT (RAILWAY SAFE)
+// DB INIT
 // ===============================
 let db = null;
-
-const volumePath = "/data/embeddings.db";
-const repoPath = "./embeddings.db";
-
-// si no existe en volume, lo copiamos desde el repo
-if (!fs.existsSync(volumePath) && fs.existsSync(repoPath)) {
-  fs.copyFileSync(repoPath, volumePath);
-  console.log("📦 DB copiada al volume");
-}
 
 function initDB() {
   try {
@@ -62,12 +53,19 @@ function initDB() {
     const dbPath = process.env.DB_PATH || "/data/embeddings.db";
     console.log("📦 DB Path:", dbPath);
 
+    // 🔥 DEBUG FILE SYSTEM
+    console.log("📦 DB EXISTS:", fs.existsSync(dbPath));
+
+    if (fs.existsSync(dbPath)) {
+      const size = fs.statSync(dbPath).size;
+      console.log("📦 DB SIZE (bytes):", size);
+    }
+
     db = new Database(dbPath);
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS embeddings (
-        id INTEGER PRIMARY KEY,
-        url TEXT,
+        url TEXT PRIMARY KEY,
         titulo TEXT,
         titulo_original TEXT,
         descripcion TEXT,
@@ -80,7 +78,7 @@ function initDB() {
       );
     `);
 
-    console.log("✅ SQLite listo");
+    console.log("✅ SQLite conectado");
   } catch (err) {
     console.error("❌ SQLite error:", err.message);
     db = null;
@@ -95,24 +93,31 @@ let PRODUCTS_CACHE = [];
 function loadProducts() {
   try {
     if (!db) {
-      console.log("⚠️ DB no disponible, cache vacío");
+      console.log("⚠️ DB no disponible");
       PRODUCTS_CACHE = [];
       return;
     }
 
     console.log("📦 Cargando embeddings...");
 
+    const countCheck = db
+      .prepare("SELECT COUNT(*) as c FROM embeddings")
+      .get();
+
+    console.log("🔢 TOTAL EN DB:", countCheck.c);
+
     const rows = db.prepare("SELECT * FROM embeddings").all();
+
+    console.log("📊 ROWS FETCHED:", rows.length);
 
     PRODUCTS_CACHE = rows.map((r) => ({
       url: r.url,
       titulo: r.titulo,
-      titulo_original: r.titulo_original,
       descripcion: r.descripcion,
       imagen: r.imagenCloud || r.imagen || null,
-      precio: r.precio || null,
-      categoria: r.categoria || null,
-      proveedor: r.proveedor || null,
+      precio: r.precio,
+      categoria: r.categoria,
+      proveedor: r.proveedor,
       embedding: r.embedding ? JSON.parse(r.embedding) : null,
     }));
 
@@ -124,13 +129,13 @@ function loadProducts() {
 }
 
 // ===============================
-// INIT STARTUP
+// STARTUP
 // ===============================
 initDB();
 loadProducts();
 
 // ===============================
-// COSINE SIMILARITY
+// COSINE
 // ===============================
 function cosineSimilarity(a, b) {
   let dot = 0;
@@ -149,63 +154,47 @@ function cosineSimilarity(a, b) {
 }
 
 // ===============================
-// SEARCH IMAGE
+// API SEARCH IMAGE
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
   try {
-    console.log("📥 Request /buscarPorImagen");
+    console.log("📥 Request recibida");
 
     if (!req.files?.imagen) {
-      return res.status(400).json({ error: "No se recibió imagen" });
+      return res.status(400).json({ error: "No imagen" });
     }
 
     const file = req.files.imagen;
-
-    console.log("🖼️ Imagen recibida:", file.name);
-
     const buffer = fs.readFileSync(file.tempFilePath);
     fs.unlinkSync(file.tempFilePath);
 
     const base64 = buffer.toString("base64");
     const imageUrl = `data:image/jpeg;base64,${base64}`;
 
-    let descripcion = "";
+    console.log("🤖 Vision...");
 
-    try {
-      console.log("🤖 Ejecutando Vision...");
+    const vision = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Describe este producto",
+            },
+            {
+              type: "input_image",
+              image_url: imageUrl,
+            },
+          ],
+        },
+      ],
+    });
 
-      const vision = await openai.responses.create({
-        model: "gpt-4.1-mini",
-        input: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: "Describe este producto con precisión: tipo, material, uso.",
-              },
-              {
-                type: "input_image",
-                image_url: imageUrl,
-              },
-            ],
-          },
-        ],
-      });
+    const descripcion = (vision.output_text || "").trim();
 
-      descripcion = (vision.output_text || "").trim();
-
-      console.log("🧠 Descripción:", descripcion);
-    } catch (e) {
-      console.error("❌ Vision error:", e.message);
-      return res.status(500).json({ error: "Vision failed" });
-    }
-
-    if (!descripcion) {
-      return res.json({ ok: false, resultados: [] });
-    }
-
-    console.log("🔎 Generando embedding...");
+    console.log("🧠 Descripción:", descripcion);
 
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
@@ -214,45 +203,30 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const queryEmbedding = emb.data[0].embedding;
 
-    const resultados = [];
+    const results = [];
 
-    for (let i = 0; i < PRODUCTS_CACHE.length; i++) {
-      const p = PRODUCTS_CACHE[i];
+    for (const p of PRODUCTS_CACHE) {
       if (!p.embedding) continue;
 
       const score = cosineSimilarity(queryEmbedding, p.embedding);
-
       if (score < 0.15) continue;
 
-      resultados.push({ ...p, score });
+      results.push({ ...p, score });
     }
 
-    resultados.sort((a, b) => b.score - a.score);
+    results.sort((a, b) => b.score - a.score);
 
-    const top = resultados.slice(0, 10).map((r) => ({
-      titulo: r.titulo,
-      descripcion: r.descripcion,
-      imagen: r.imagen,
-      precio: r.precio,
-      proveedor: r.proveedor,
-      url: r.url,
-      score: Number(r.score.toFixed(4)),
-    }));
-
-    console.log("📊 Resultados:", top.length);
+    console.log("📊 RESULTADOS:", results.length);
 
     res.json({
       ok: true,
       descripcion,
-      total: top.length,
-      resultados: top,
+      total: results.length,
+      resultados: results.slice(0, 10),
     });
   } catch (err) {
-    console.error("🔥 ERROR GENERAL:", err);
-    res.status(500).json({
-      error: "Error procesando imagen",
-      detalle: err.message,
-    });
+    console.error("🔥 ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -260,43 +234,24 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 // STATUS
 // ===============================
 app.get("/api/status", (req, res) => {
-  try {
-    if (!db) {
-      return res.json({
-        estado: "warning",
-        embeddings: 0,
-        cache: PRODUCTS_CACHE.length,
-        db: "no disponible",
-      });
-    }
-
-    const count = db.prepare("SELECT COUNT(*) as c FROM embeddings").get();
-
-    res.json({
-      estado: "ok",
-      embeddings: count.c,
-      cache: PRODUCTS_CACHE.length,
-    });
-  } catch (err) {
-    res.json({
-      estado: "error",
-      error: err.message,
-    });
-  }
+  res.json({
+    cache: PRODUCTS_CACHE.length,
+    db: db ? "ok" : "null",
+  });
 });
 
 // ===============================
-// RELOAD CACHE
+// RELOAD
 // ===============================
 app.get("/api/reload", (req, res) => {
   loadProducts();
-  res.json({ ok: true, reloaded: PRODUCTS_CACHE.length });
+  res.json({ ok: true, cache: PRODUCTS_CACHE.length });
 });
 
 // ===============================
 // START SERVER
 // ===============================
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("🚀 Servidor activo");
-  console.log(`📡 Puerto: ${PORT}`);
+  console.log("🚀 Server running");
+  console.log("📡 PORT:", PORT);
 });
