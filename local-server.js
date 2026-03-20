@@ -9,16 +9,30 @@ import Database from "better-sqlite3";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ===============================
+// MIDDLEWARE
+// ===============================
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 app.use(
   fileUpload({
     useTempFiles: true,
-    tempFileDir: "./tmp",
+    tempFileDir: "/tmp",
     createParentPath: true,
   })
 );
+
+// ===============================
+// GLOBAL ERROR LOGGING (CRASH DEBUG)
+// ===============================
+process.on("uncaughtException", (err) => {
+  console.error("💥 uncaughtException:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("💥 unhandledRejection:", reason);
+});
 
 // ===============================
 // OPENAI
@@ -28,7 +42,7 @@ const openai = new OpenAI({
 });
 
 // ===============================
-// SQLITE SAFE INIT
+// SQLITE INIT (RAILWAY SAFE)
 // ===============================
 let db = null;
 
@@ -36,7 +50,10 @@ function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
 
-    db = new Database("/app/embeddings.db");
+    const dbPath = process.env.DB_PATH || "/tmp/embeddings.db";
+    console.log("📦 DB Path:", dbPath);
+
+    db = new Database(dbPath);
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS embeddings (
@@ -127,11 +144,16 @@ function cosineSimilarity(a, b) {
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
   try {
+    console.log("📥 Request /buscarPorImagen");
+
     if (!req.files?.imagen) {
       return res.status(400).json({ error: "No se recibió imagen" });
     }
 
     const file = req.files.imagen;
+
+    console.log("🖼️ Imagen recibida:", file.name);
+
     const buffer = fs.readFileSync(file.tempFilePath);
     fs.unlinkSync(file.tempFilePath);
 
@@ -141,6 +163,8 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     let descripcion = "";
 
     try {
+      console.log("🤖 Ejecutando Vision...");
+
       const vision = await openai.responses.create({
         model: "gpt-4.1-mini",
         input: [
@@ -161,6 +185,8 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       });
 
       descripcion = (vision.output_text || "").trim();
+
+      console.log("🧠 Descripción:", descripcion);
     } catch (e) {
       console.error("❌ Vision error:", e.message);
       return res.status(500).json({ error: "Vision failed" });
@@ -169,6 +195,8 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     if (!descripcion) {
       return res.json({ ok: false, resultados: [] });
     }
+
+    console.log("🔎 Generando embedding...");
 
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
@@ -181,7 +209,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     for (let i = 0; i < PRODUCTS_CACHE.length; i++) {
       const p = PRODUCTS_CACHE[i];
-
       if (!p.embedding) continue;
 
       const score = cosineSimilarity(queryEmbedding, p.embedding);
@@ -203,16 +230,16 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       score: Number(r.score.toFixed(4)),
     }));
 
+    console.log("📊 Resultados:", top.length);
+
     res.json({
       ok: true,
       descripcion,
       total: top.length,
       resultados: top,
     });
-
   } catch (err) {
-    console.error("🔥 ERROR:", err.message);
-
+    console.error("🔥 ERROR GENERAL:", err);
     res.status(500).json({
       error: "Error procesando imagen",
       detalle: err.message,
@@ -221,7 +248,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 });
 
 // ===============================
-// STATUS SAFE
+// STATUS
 // ===============================
 app.get("/api/status", (req, res) => {
   try {
@@ -241,7 +268,6 @@ app.get("/api/status", (req, res) => {
       embeddings: count.c,
       cache: PRODUCTS_CACHE.length,
     });
-
   } catch (err) {
     res.json({
       estado: "error",
