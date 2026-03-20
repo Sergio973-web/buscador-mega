@@ -46,6 +46,15 @@ const openai = new OpenAI({
 // ===============================
 let db = null;
 
+const volumePath = "/data/embeddings.db";
+const repoPath = "./embeddings.db";
+
+// si no existe en volume, lo copiamos desde el repo
+if (!fs.existsSync(volumePath) && fs.existsSync(repoPath)) {
+  fs.copyFileSync(repoPath, volumePath);
+  console.log("📦 DB copiada al volume");
+}
+
 function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
