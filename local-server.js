@@ -21,7 +21,7 @@ app.use(
     useTempFiles: true,
     tempFileDir: "/tmp",
     createParentPath: true,
-    limits: { fileSize: 1000 * 1024 * 1024 }, // 1000MB
+    limits: { fileSize: 5 * 1024 * 1024 }, // 1000MB
     abortOnLimit: true,
   })
 );
@@ -182,10 +182,10 @@ function loadProducts() {
 initDB();
 
 // cargar en background (NO bloquea el arranque)
-setTimeout(() => {
-  console.log("⏳ Cargando productos en background...");
-  loadProducts();
-}, 2000);
+// setTimeout(() => {
+//   console.log("⏳ Cargando productos en background...");
+//   loadProducts();
+// }, 2000);
 
 // ===============================
 // COSINE
@@ -304,15 +304,36 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const results = [];
 
-    for (const p of PRODUCTS_CACHE) {
-      if (!p.embedding || p.embedding.length !== queryEmbedding.length)
+    const stmt = db.prepare("SELECT * FROM embeddings");
+
+    for (const row of stmt.iterate()) {
+      if (!row.embedding) continue;
+
+      let embedding;
+      try {
+        embedding = JSON.parse(row.embedding);
+      } catch {
+        continue;
+      }
+
+      if (!embedding || embedding.length !== queryEmbedding.length)
         continue;
 
-      const score = cosineSimilarity(queryEmbedding, p.embedding);
+      const score = cosineSimilarity(queryEmbedding, embedding);
       if (score < 0.15) continue;
 
-      results.push({ ...p, score });
+      results.push({
+        url: row.url,
+        titulo: row.titulo,
+        descripcion: row.descripcion,
+        imagen: row.imagenCloud || row.imagen || null,
+        precio: row.precio,
+        categoria: row.categoria,
+        proveedor: row.proveedor,
+        score,
+      });
     }
+
 
     results.sort((a, b) => b.score - a.score);
 
