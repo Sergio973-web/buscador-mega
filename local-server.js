@@ -50,7 +50,7 @@ function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
 
-    const dbPath = process.env.DB_PATH || "/tmp/embeddings.db";
+    const dbPath = process.env.DB_PATH || "/data/embeddings.db";
     console.log("📦 DB Path:", dbPath);
 
     db = new Database(dbPath);
