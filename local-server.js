@@ -214,7 +214,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const results = [];
 
-    const stmt = db.prepare("SELECT * FROM embeddings LIMIT 500");
+    const stmt = db.prepare("SELECT * FROM embeddings LIMIT 200");
 
     const MAX_RESULTS = 10;
     const MIN_SCORE = 0.15;
@@ -226,7 +226,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       if (!row.embedding) continue;
 
       let embedding;
-
       try {
         embedding = JSON.parse(row.embedding);
       } catch {
@@ -238,46 +237,25 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
       const score = cosineSimilarity(queryEmbedding, embedding);
 
-      // 🔥 filtra ANTES de guardar
       if (score < MIN_SCORE) continue;
 
-      // 🔥 inserta ordenado (evita sort final pesado)
-      if (results.length < MAX_RESULTS) {
-        results.push({
-          url: row.url,
-          titulo: row.titulo,
-          descripcion: row.descripcion,
-          imagen: row.imagenCloud || row.imagen || null,
-          precio: row.precio,
-          categoria: row.categoria,
-          proveedor: row.proveedor,
-          score,
-        });
+      results.push({
+        url: row.url,
+        titulo: row.titulo,
+        descripcion: row.descripcion,
+        imagen: row.imagenCloud || row.imagen || null,
+        precio: row.precio,
+        categoria: row.categoria,
+        proveedor: row.proveedor,
+        score,
+      });
 
-        // mantener ordenado pequeño (evita sort final)
-        results.sort((a, b) => b.score - a.score);
+      // 🔥 corte inmediato (CRÍTICO)
+      if (results.length >= MAX_RESULTS) break;
 
-      } else {
-        // reemplaza solo si es mejor que el peor
-        if (score > results[results.length - 1].score) {
-          results[results.length - 1] = {
-            url: row.url,
-            titulo: row.titulo,
-            descripcion: row.descripcion,
-            imagen: row.imagenCloud || row.imagen || null,
-            precio: row.precio,
-            categoria: row.categoria,
-            proveedor: row.proveedor,
-            score,
-          };
-
-          results.sort((a, b) => b.score - a.score);
-        }
-      }
-
-      // 🔥 corte duro extra por seguridad
-      if (process.memoryUsage().heapUsed > 400 * 1024 * 1024) {
-        console.log("⚠️ Memory limit reached, breaking early");
+      // 🔥 protección de memoria
+      if (process.memoryUsage().heapUsed > 300 * 1024 * 1024) {
+        console.log("⚠️ memory safe stop");
         break;
       }
     }
