@@ -84,15 +84,13 @@ try {
 function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
+
     db = new Database(DB_PATH);
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS embeddings (
         url TEXT PRIMARY KEY,
         titulo TEXT,
-        titulo_original TEXT,
-        descripcion TEXT,
-        imagen TEXT,
         imagenCloud TEXT,
         precio TEXT,
         categoria TEXT,
