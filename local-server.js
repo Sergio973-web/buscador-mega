@@ -280,6 +280,19 @@ app.get("/", (req, res) => {
   res.send("API funcionando 🚀");
 });
 
+app.get("/api/delete-db", (req, res) => {
+  try {
+    const path = "/data/embeddings.db";
+    if (fs.existsSync(path)) {
+      fs.unlinkSync(path);
+      return res.json({ ok: true, deleted: true });
+    }
+    res.json({ ok: true, deleted: false });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
 // ===============================
 // START SERVER
 // ===============================

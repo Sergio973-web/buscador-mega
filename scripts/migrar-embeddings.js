@@ -3,79 +3,42 @@ import Database from "better-sqlite3";
 
 const filePath = "./embeddings/embeddings.json";
 
-// ======================================================
-// 1. INIT DB (PRODUCTION MODE)
-// ======================================================
+// límite 480MB (margen de seguridad)
+const MAX_DB_SIZE = 480 * 1024 * 1024;
+
 const db = new Database("embeddings.db");
 
-console.log("🗄️ Inicializando SQLite PRO...");
-
-// 🔥 optimización real SQLite
 db.pragma("journal_mode = WAL");
 db.pragma("synchronous = NORMAL");
 db.pragma("temp_store = MEMORY");
-db.pragma("cache_size = -200000"); // ~200MB cache si hay RAM
 
-// ======================================================
-// 2. SCHEMA COMPLETO (NO FALTA NADA)
-// ======================================================
+// ===============================
+// SCHEMA OPTIMIZADO
+// ===============================
 db.exec(`
 CREATE TABLE IF NOT EXISTS embeddings (
   url TEXT PRIMARY KEY,
-
   titulo TEXT,
-  titulo_original TEXT,
-  descripcion TEXT,
-
-  imagen TEXT,
   imagenCloud TEXT,
-
   precio TEXT,
   categoria TEXT,
   proveedor TEXT,
-
   embedding TEXT
 );
-
-CREATE INDEX IF NOT EXISTS idx_titulo ON embeddings(titulo);
-CREATE INDEX IF NOT EXISTS idx_categoria ON embeddings(categoria);
-CREATE INDEX IF NOT EXISTS idx_proveedor ON embeddings(proveedor);
 `);
 
-console.log("✅ Schema + índices listos");
-
-// ======================================================
-// 3. PREPARED STATEMENT
-// ======================================================
 const insert = db.prepare(`
   INSERT OR REPLACE INTO embeddings (
-    url,
-    titulo,
-    titulo_original,
-    descripcion,
-    imagen,
-    imagenCloud,
-    precio,
-    categoria,
-    proveedor,
-    embedding
+    url, titulo, imagenCloud, precio, categoria, proveedor, embedding
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
-// ======================================================
-// 4. TRANSACTION BATCH (CLAVE DE PERFORMANCE)
-// ======================================================
 const insertBatch = db.transaction((items) => {
   for (const p of items) {
-    if (!p?.url) continue;
-
     insert.run(
       p.url || "",
       p.titulo || "",
-      p.titulo_original || "",
-      p.descripcion || "",
-      p.imagen || "",
       p.imagenCloud || "",
       p.precio || "",
       p.categoria || "",
@@ -85,9 +48,9 @@ const insertBatch = db.transaction((items) => {
   }
 });
 
-// ======================================================
-// 5. STREAM READER (MEMORY SAFE)
-// ======================================================
+// ===============================
+// STREAM
+// ===============================
 const stream = fs.createReadStream(filePath, {
   encoding: "utf8",
   highWaterMark: 1024 * 1024
@@ -96,28 +59,48 @@ const stream = fs.createReadStream(filePath, {
 let buffer = "";
 let batch = [];
 let count = 0;
+let stopped = false;
+
+function getDBSize() {
+  try {
+    return fs.statSync("embeddings.db").size;
+  } catch {
+    return 0;
+  }
+}
 
 function flush() {
-  if (batch.length === 0) return;
+  if (batch.length === 0 || stopped) return;
 
   insertBatch(batch);
   count += batch.length;
 
-  console.log(`⏳ migrados: ${count}`);
+  const size = getDBSize();
+
+  console.log(`⏳ migrados: ${count} | DB: ${(size / 1024 / 1024).toFixed(2)} MB`);
+
+  // 🚨 corte automático
+  if (size >= MAX_DB_SIZE) {
+    console.log("🛑 LIMITE ALCANZADO, DETENIENDO...");
+    stopped = true;
+    stream.destroy();
+  }
+
   batch = [];
 }
 
-// ======================================================
-// 6. PARSER ROBUSTO
-// ======================================================
+// ===============================
+// PARSER
+// ===============================
 stream.on("data", (chunk) => {
+  if (stopped) return;
+
   buffer += chunk;
 
   let start = buffer.indexOf("{");
 
   while (start !== -1) {
     let end = buffer.indexOf("}", start + 1);
-
     if (end === -1) break;
 
     const raw = buffer.slice(start, end + 1);
@@ -126,10 +109,7 @@ stream.on("data", (chunk) => {
       const obj = JSON.parse(raw);
       batch.push(obj);
 
-      // batch control (performance sweet spot)
-      if (batch.length >= 500) {
-        flush();
-      }
+      if (batch.length >= 500) flush();
 
       buffer = buffer.slice(end + 1);
       start = buffer.indexOf("{");
@@ -139,15 +119,14 @@ stream.on("data", (chunk) => {
   }
 });
 
-// ======================================================
-// 7. FINISH
-// ======================================================
+// ===============================
+// FIN
+// ===============================
 stream.on("end", () => {
   flush();
 
   console.log("\n================================");
-  console.log("🚀 MIGRACIÓN FINALIZADA");
+  console.log("🚀 DB OPTIMIZADA LISTA");
   console.log("📦 TOTAL:", count);
-  console.log("🧠 SQLite listo para buscador semántico");
   console.log("================================\n");
 });
