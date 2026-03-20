@@ -122,6 +122,7 @@ function initDB() {
     db = null;
   }
 }
+
 // ===============================
 // CACHE
 // ===============================
@@ -147,16 +148,26 @@ function loadProducts() {
 
     console.log("📊 ROWS FETCHED:", rows.length);
 
-    PRODUCTS_CACHE = rows.map((r) => ({
-      url: r.url,
-      titulo: r.titulo,
-      descripcion: r.descripcion,
-      imagen: r.imagenCloud || r.imagen || null,
-      precio: r.precio,
-      categoria: r.categoria,
-      proveedor: r.proveedor,
-      embedding: r.embedding ? JSON.parse(r.embedding) : null,
-    }));
+    PRODUCTS_CACHE = rows.map((r) => {
+      let parsedEmbedding = null;
+
+      try {
+        parsedEmbedding = r.embedding ? JSON.parse(r.embedding) : null;
+      } catch (e) {
+        console.log("⚠️ Embedding corrupto en:", r.url);
+      }
+
+      return {
+        url: r.url,
+        titulo: r.titulo,
+        descripcion: r.descripcion,
+        imagen: r.imagenCloud || r.imagen || null,
+        precio: r.precio,
+        categoria: r.categoria,
+        proveedor: r.proveedor,
+        embedding: parsedEmbedding,
+      };
+    });
 
     console.log(`✅ Productos en memoria: ${PRODUCTS_CACHE.length}`);
   } catch (err) {
@@ -175,6 +186,7 @@ setTimeout(() => {
   console.log("⏳ Cargando productos en background...");
   loadProducts();
 }, 2000);
+
 // ===============================
 // COSINE
 // ===============================
@@ -242,8 +254,18 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     }
 
     const file = req.files.imagen;
+
+    if (!file.tempFilePath || !fs.existsSync(file.tempFilePath)) {
+      return res.status(400).json({ error: "Archivo temporal inválido" });
+    }
+
     const buffer = fs.readFileSync(file.tempFilePath);
-    fs.unlinkSync(file.tempFilePath);
+
+    try {
+      fs.unlinkSync(file.tempFilePath);
+    } catch (e) {
+      console.log("⚠️ No se pudo borrar temp file");
+    }
 
     const base64 = buffer.toString("base64");
 
@@ -254,7 +276,10 @@ app.post("/api/buscarPorImagen", async (req, res) => {
           role: "user",
           content: [
             { type: "input_text", text: "Describe este producto" },
-            { type: "input_image", image_url: `data:image/jpeg;base64,${base64}` },
+            {
+              type: "input_image",
+              image_url: `data:image/jpeg;base64,${base64}`,
+            },
           ],
         },
       ],
@@ -262,17 +287,26 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const descripcion = (vision.output_text || "").trim();
 
+    if (!descripcion) {
+      return res.status(500).json({ error: "No se pudo generar descripción" });
+    }
+
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: descripcion,
     });
 
-    const queryEmbedding = emb.data[0].embedding;
+    const queryEmbedding = emb.data[0]?.embedding;
+
+    if (!queryEmbedding) {
+      return res.status(500).json({ error: "Embedding falló" });
+    }
 
     const results = [];
 
     for (const p of PRODUCTS_CACHE) {
-      if (!p.embedding) continue;
+      if (!p.embedding || p.embedding.length !== queryEmbedding.length)
+        continue;
 
       const score = cosineSimilarity(queryEmbedding, p.embedding);
       if (score < 0.15) continue;
