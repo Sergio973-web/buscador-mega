@@ -48,16 +48,53 @@ const openai = new OpenAI({
 // DB INIT
 // ===============================
 let db = null;
-let DB_PATH = process.env.DB_PATH || "/data/embeddings.db";
+const DB_PATH = process.env.DB_PATH || "/data/embeddings.db";
 
+// ===============================
+// COPY DB TO VOLUME (SAFE)
+// ===============================
+const LOCAL_DB = "./embeddings.db";
+const VOLUME_DB = "/data/embeddings.db";
+
+try {
+  console.log("🔍 Verificando DB...");
+
+  const localExists = fs.existsSync(LOCAL_DB);
+  const volumeExists = fs.existsSync(VOLUME_DB);
+
+  console.log("📁 LOCAL_DB existe:", localExists);
+  console.log("📁 VOLUME_DB existe:", volumeExists);
+
+  if (!volumeExists && localExists) {
+    console.log("📥 Copiando DB inicial al volumen...");
+
+    const stats = fs.statSync(LOCAL_DB);
+    console.log("📦 Tamaño DB local:", stats.size);
+
+    fs.copyFileSync(LOCAL_DB, VOLUME_DB);
+
+    console.log("✅ DB copiada correctamente");
+  } else if (volumeExists) {
+    console.log("ℹ️ DB ya existe en volumen");
+  } else {
+    console.log("❌ No hay DB disponible en ningún lado");
+  }
+} catch (err) {
+  console.error("❌ Error copiando DB:", err.message);
+}
+
+// ===============================
+// INIT DB
+// ===============================
 function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
     console.log("📦 DB Path:", DB_PATH);
 
-    console.log("📦 DB EXISTS:", fs.existsSync(DB_PATH));
+    const exists = fs.existsSync(DB_PATH);
+    console.log("📦 DB EXISTS:", exists);
 
-    if (fs.existsSync(DB_PATH)) {
+    if (exists) {
       const size = fs.statSync(DB_PATH).size;
       console.log("📦 DB SIZE (bytes):", size);
     }
@@ -85,7 +122,6 @@ function initDB() {
     db = null;
   }
 }
-
 // ===============================
 // CACHE
 // ===============================
