@@ -181,11 +181,7 @@ function loadProducts() {
 // ===============================
 initDB();
 
-// cargar en background (NO bloquea el arranque)
-setTimeout(() => {
-   console.log("⏳ Cargando productos en background...");
-   loadProducts();
-}, 2000);
+loadProducts();
 
 // ===============================
 // COSINE
