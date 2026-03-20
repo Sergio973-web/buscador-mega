@@ -13,13 +13,16 @@ const PORT = process.env.PORT || 3001;
 // MIDDLEWARE
 // ===============================
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "1000mb", extended: true }));
 
 app.use(
   fileUpload({
     useTempFiles: true,
     tempFileDir: "/tmp",
     createParentPath: true,
+    limits: { fileSize: 1000 * 1024 * 1024 }, // 1000MB
+    abortOnLimit: true,
   })
 );
 
@@ -45,23 +48,21 @@ const openai = new OpenAI({
 // DB INIT
 // ===============================
 let db = null;
+let DB_PATH = process.env.DB_PATH || "/data/embeddings.db";
 
 function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
+    console.log("📦 DB Path:", DB_PATH);
 
-    const dbPath = process.env.DB_PATH || "/data/embeddings.db";
-    console.log("📦 DB Path:", dbPath);
+    console.log("📦 DB EXISTS:", fs.existsSync(DB_PATH));
 
-    // 🔥 DEBUG FILE SYSTEM
-    console.log("📦 DB EXISTS:", fs.existsSync(dbPath));
-
-    if (fs.existsSync(dbPath)) {
-      const size = fs.statSync(dbPath).size;
+    if (fs.existsSync(DB_PATH)) {
+      const size = fs.statSync(DB_PATH).size;
       console.log("📦 DB SIZE (bytes):", size);
     }
 
-    db = new Database(dbPath);
+    db = new Database(DB_PATH);
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS embeddings (
@@ -154,6 +155,42 @@ function cosineSimilarity(a, b) {
 }
 
 // ===============================
+// UPLOAD DB (🔥 CLAVE)
+// ===============================
+app.post("/api/upload-db", async (req, res) => {
+  try {
+    console.log("📥 Upload DB iniciado");
+
+    if (!req.files || !req.files.db) {
+      console.log("❌ No se recibió archivo");
+      return res.status(400).json({ error: "No DB file" });
+    }
+
+    const file = req.files.db;
+
+    console.log("📦 Nombre:", file.name);
+    console.log("📦 Tamaño:", file.size);
+
+    const targetPath = DB_PATH;
+
+    console.log("💾 Guardando en:", targetPath);
+
+    await file.mv(targetPath);
+
+    console.log("✅ DB subida correctamente");
+
+    // 🔄 recargar DB
+    db = new Database(DB_PATH);
+    loadProducts();
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ upload error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===============================
 // API SEARCH IMAGE
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
@@ -169,9 +206,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     fs.unlinkSync(file.tempFilePath);
 
     const base64 = buffer.toString("base64");
-    const imageUrl = `data:image/jpeg;base64,${base64}`;
-
-    console.log("🤖 Vision...");
 
     const vision = await openai.responses.create({
       model: "gpt-4.1-mini",
@@ -179,22 +213,14 @@ app.post("/api/buscarPorImagen", async (req, res) => {
         {
           role: "user",
           content: [
-            {
-              type: "input_text",
-              text: "Describe este producto",
-            },
-            {
-              type: "input_image",
-              image_url: imageUrl,
-            },
+            { type: "input_text", text: "Describe este producto" },
+            { type: "input_image", image_url: `data:image/jpeg;base64,${base64}` },
           ],
         },
       ],
     });
 
     const descripcion = (vision.output_text || "").trim();
-
-    console.log("🧠 Descripción:", descripcion);
 
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
@@ -215,8 +241,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     }
 
     results.sort((a, b) => b.score - a.score);
-
-    console.log("📊 RESULTADOS:", results.length);
 
     res.json({
       ok: true,
