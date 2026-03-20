@@ -218,9 +218,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const MAX_RESULTS = 10;
     const MIN_SCORE = 0.15;
-
-    const results = [];
-
+    
     for (const row of stmt.iterate()) {
 
       if (!row.embedding) continue;
