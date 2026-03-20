@@ -21,7 +21,7 @@ app.use(
     useTempFiles: true,
     tempFileDir: "/tmp",
     createParentPath: true,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 1000MB
+    limits: { fileSize: 5 * 1024 * 1024 },
     abortOnLimit: true,
   })
 );
@@ -67,17 +67,12 @@ try {
 
   if (!volumeExists && localExists) {
     console.log("📥 Copiando DB inicial al volumen...");
-
-    const stats = fs.statSync(LOCAL_DB);
-    console.log("📦 Tamaño DB local:", stats.size);
-
     fs.copyFileSync(LOCAL_DB, VOLUME_DB);
-
     console.log("✅ DB copiada correctamente");
   } else if (volumeExists) {
     console.log("ℹ️ DB ya existe en volumen");
   } else {
-    console.log("❌ No hay DB disponible en ningún lado");
+    console.log("❌ No hay DB disponible");
   }
 } catch (err) {
   console.error("❌ Error copiando DB:", err.message);
@@ -89,16 +84,6 @@ try {
 function initDB() {
   try {
     console.log("🗄️ Conectando SQLite...");
-    console.log("📦 DB Path:", DB_PATH);
-
-    const exists = fs.existsSync(DB_PATH);
-    console.log("📦 DB EXISTS:", exists);
-
-    if (exists) {
-      const size = fs.statSync(DB_PATH).size;
-      console.log("📦 DB SIZE (bytes):", size);
-    }
-
     db = new Database(DB_PATH);
 
     db.exec(`
@@ -124,64 +109,9 @@ function initDB() {
 }
 
 // ===============================
-// CACHE
-// ===============================
-let PRODUCTS_CACHE = [];
-
-function loadProducts() {
-  try {
-    if (!db) {
-      console.log("⚠️ DB no disponible");
-      PRODUCTS_CACHE = [];
-      return;
-    }
-
-    console.log("📦 Cargando embeddings...");
-
-    const countCheck = db
-      .prepare("SELECT COUNT(*) as c FROM embeddings")
-      .get();
-
-    console.log("🔢 TOTAL EN DB:", countCheck.c);
-
-    const rows = db.prepare("SELECT * FROM embeddings").all();
-
-    console.log("📊 ROWS FETCHED:", rows.length);
-
-    PRODUCTS_CACHE = rows.map((r) => {
-      let parsedEmbedding = null;
-
-      try {
-        parsedEmbedding = r.embedding ? JSON.parse(r.embedding) : null;
-      } catch (e) {
-        console.log("⚠️ Embedding corrupto en:", r.url);
-      }
-
-      return {
-        url: r.url,
-        titulo: r.titulo,
-        descripcion: r.descripcion,
-        imagen: r.imagenCloud || r.imagen || null,
-        precio: r.precio,
-        categoria: r.categoria,
-        proveedor: r.proveedor,
-        embedding: parsedEmbedding,
-      };
-    });
-
-    console.log(`✅ Productos en memoria: ${PRODUCTS_CACHE.length}`);
-  } catch (err) {
-    console.error("❌ loadProducts error:", err.message);
-    PRODUCTS_CACHE = [];
-  }
-}
-
-// ===============================
 // STARTUP
 // ===============================
 initDB();
-
-loadProducts();
 
 // ===============================
 // COSINE
@@ -203,65 +133,59 @@ function cosineSimilarity(a, b) {
 }
 
 // ===============================
-// UPLOAD DB (🔥 CLAVE)
+// STATUS (SIN CACHE)
+// ===============================
+app.get("/api/status", (req, res) => {
+  let count = 0;
+
+  try {
+    const row = db.prepare("SELECT COUNT(*) as c FROM embeddings").get();
+    count = row?.c || 0;
+  } catch (e) {
+    console.log("status error:", e.message);
+  }
+
+  res.json({
+    db: db ? "ok" : "null",
+    total: count,
+  });
+});
+
+// ===============================
+// UPLOAD DB
 // ===============================
 app.post("/api/upload-db", async (req, res) => {
   try {
-    console.log("📥 Upload DB iniciado");
-
     if (!req.files || !req.files.db) {
-      console.log("❌ No se recibió archivo");
       return res.status(400).json({ error: "No DB file" });
     }
 
     const file = req.files.db;
+    await file.mv(DB_PATH);
 
-    console.log("📦 Nombre:", file.name);
-    console.log("📦 Tamaño:", file.size);
-
-    const targetPath = DB_PATH;
-
-    console.log("💾 Guardando en:", targetPath);
-
-    await file.mv(targetPath);
-
-    console.log("✅ DB subida correctamente");
-
-    // 🔄 recargar DB
     db = new Database(DB_PATH);
-    loadProducts();
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("❌ upload error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // ===============================
-// API SEARCH IMAGE
+// SEARCH IMAGE (OPTIMIZADO SIN CACHE)
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
   try {
-    console.log("📥 Request recibida");
-
     if (!req.files?.imagen) {
       return res.status(400).json({ error: "No imagen" });
     }
 
     const file = req.files.imagen;
-
-    if (!file.tempFilePath || !fs.existsSync(file.tempFilePath)) {
-      return res.status(400).json({ error: "Archivo temporal inválido" });
-    }
-
     const buffer = fs.readFileSync(file.tempFilePath);
 
     try {
       fs.unlinkSync(file.tempFilePath);
-    } catch (e) {
-      console.log("⚠️ No se pudo borrar temp file");
-    }
+    } catch {}
 
     const base64 = buffer.toString("base64");
 
@@ -283,26 +207,17 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     const descripcion = (vision.output_text || "").trim();
 
-    if (!descripcion) {
-      return res.status(500).json({ error: "No se pudo generar descripción" });
-    }
-
     const emb = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: descripcion,
     });
 
-    const queryEmbedding = emb.data[0]?.embedding;
-
-    if (!queryEmbedding) {
-      return res.status(500).json({ error: "Embedding falló" });
-    }
+    const queryEmbedding = emb.data[0].embedding;
 
     const results = [];
 
-    const stmt = db.prepare("SELECT * FROM embeddings");
-
-    for (const row of stmt.iterate()) {
+    // 🔥 STREAM DIRECTO (SIN CACHE)
+    for (const row of db.prepare("SELECT * FROM embeddings").iterate()) {
       if (!row.embedding) continue;
 
       let embedding;
@@ -312,8 +227,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
         continue;
       }
 
-      if (!embedding || embedding.length !== queryEmbedding.length)
-        continue;
+      if (embedding.length !== queryEmbedding.length) continue;
 
       const score = cosineSimilarity(queryEmbedding, embedding);
       if (score < 0.15) continue;
@@ -330,7 +244,6 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       });
     }
 
-
     results.sort((a, b) => b.score - a.score);
 
     res.json({
@@ -340,41 +253,28 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       resultados: results.slice(0, 10),
     });
   } catch (err) {
-    console.error("🔥 ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // ===============================
-// STATUS
+// ROOT
 // ===============================
-app.get("/api/status", (req, res) => {
-  res.json({
-    cache: PRODUCTS_CACHE.length,
-    db: db ? "ok" : "null",
-  });
-});
-
-// ===============================
-// RELOAD
-// ===============================
-app.get("/api/reload", (req, res) => {
-  loadProducts();
-  res.json({ ok: true, cache: PRODUCTS_CACHE.length });
-});
-
 app.get("/", (req, res) => {
   res.send("API funcionando 🚀");
 });
 
+// ===============================
+// DELETE DB
+// ===============================
 app.get("/api/delete-db", (req, res) => {
   try {
-    const path = "/data/embeddings.db";
-    if (fs.existsSync(path)) {
-      fs.unlinkSync(path);
-      return res.json({ ok: true, deleted: true });
+    if (fs.existsSync(DB_PATH)) {
+      fs.unlinkSync(DB_PATH);
+      return res.json({ ok: true });
     }
-    res.json({ ok: true, deleted: false });
+    res.json({ ok: false });
   } catch (e) {
     res.json({ error: e.message });
   }
