@@ -133,8 +133,12 @@ function loadProducts() {
 // STARTUP
 // ===============================
 initDB();
-loadProducts();
 
+// cargar en background (NO bloquea el arranque)
+setTimeout(() => {
+  console.log("⏳ Cargando productos en background...");
+  loadProducts();
+}, 2000);
 // ===============================
 // COSINE
 // ===============================
@@ -270,6 +274,10 @@ app.get("/api/status", (req, res) => {
 app.get("/api/reload", (req, res) => {
   loadProducts();
   res.json({ ok: true, cache: PRODUCTS_CACHE.length });
+});
+
+app.get("/", (req, res) => {
+  res.send("API funcionando 🚀");
 });
 
 // ===============================
