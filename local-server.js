@@ -151,6 +151,21 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     console.log("🧠 Descripción:", descripcion);
 
     // ===============================
+    // PREFILTRO KEYWORDS
+    // ===============================
+    const keywords = descripcion
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w =>
+          w.length > 3 &&
+          !["para", "este", "esta", "tipo", "forma", "producto"].includes(w)
+        )
+
+      .slice(0, 5);
+
+    console.log("🔎 Keywords:", keywords);
+
+    // ===============================
     // EMBEDDING
     // ===============================
     const emb = await openai.embeddings.create({
@@ -170,6 +185,27 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
     for (const row of stmt.iterate()) {
       processed++;
+
+      // ===============================
+      // PREFILTRO POR TEXTO (RÁPIDO)
+      // ===============================
+      const titulo = (row.titulo || "").toLowerCase();
+      const categoria = (row.categoria || "").toLowerCase();
+
+      let hits = 0;
+
+      for (const k of keywords) {
+        if (titulo.includes(k) || categoria.includes(k)) {
+          hits++;
+          if (hits >= 1) break; // podés subir a 2 si querés más precisión
+        }
+      }
+
+      if (hits < 2) continue;
+
+      if (!match) continue;
+
+      
 
       if (!row.embedding) continue;
 
@@ -200,7 +236,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       if (processed >= MAX_SCAN) break;
 
       if (results.length >= MAX_RESULTS && processed > 4000) break;
-      
+
       // 🔥 liberar event loop
       if (processed % YIELD_EVERY === 0) {
         await new Promise((r) => setImmediate(r));
