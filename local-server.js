@@ -109,7 +109,7 @@ const YIELD_EVERY = 800;  // evita freeze
 const MAX_SCAN = 6000;
 
 // ===============================
-// SEARCH IMAGE (FINAL)
+// SEARCH IMAGE (OPTIMIZADO REAL)
 // ===============================
 app.post("/api/buscarPorImagen", async (req, res) => {
   try {
@@ -136,7 +136,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
           content: [
             {
               type: "input_text",
-              text: "Describe este producto de forma detallada para ecommerce (tipo, uso, categoría, estilo)",
+              text: "Describe este producto para ecommerce (tipo, categoría, uso, material, estilo)",
             },
             {
               type: "input_image",
@@ -151,17 +151,17 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     console.log("🧠 Descripción:", descripcion);
 
     // ===============================
-    // PREFILTRO KEYWORDS
+    // KEYWORDS INTELIGENTES
     // ===============================
     const keywords = descripcion
       .toLowerCase()
+      .replace(/[^\w\s]/g, "")
       .split(/\s+/)
       .filter(w =>
-          w.length > 3 &&
-          !["para", "este", "esta", "tipo", "forma", "producto"].includes(w)
-        )
-
-      .slice(0, 5);
+        w.length > 4 &&
+        !["para", "este", "esta", "tipo", "forma", "producto", "imagen"].includes(w)
+      )
+      .slice(0, 8);
 
     console.log("🔎 Keywords:", keywords);
 
@@ -176,7 +176,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     const queryEmbedding = emb.data[0].embedding;
 
     // ===============================
-    // SEARCH DB (STREAM SAFE)
+    // SEARCH DB
     // ===============================
     const stmt = db.prepare("SELECT * FROM embeddings");
 
@@ -186,27 +186,27 @@ app.post("/api/buscarPorImagen", async (req, res) => {
     for (const row of stmt.iterate()) {
       processed++;
 
-      // ===============================
-      // PREFILTRO POR TEXTO (RÁPIDO)
-      // ===============================
       const titulo = (row.titulo || "").toLowerCase();
       const categoria = (row.categoria || "").toLowerCase();
 
+      // ===============================
+      // PREFILTRO SUAVE (NO ROMPE)
+      // ===============================
       let hits = 0;
 
       for (const k of keywords) {
         if (titulo.includes(k) || categoria.includes(k)) {
           hits++;
-          if (hits >= 1) break; // podés subir a 2 si querés más precisión
+          break; // solo 1 match necesario
         }
       }
 
-      if (hits < 2) continue;
+      // 🔥 SOLO filtramos al principio (performance)
+      if (hits === 0 && processed < 2000) continue;
 
-      if (!match) continue;
-
-      
-
+      // ===============================
+      // EMBEDDING
+      // ===============================
       if (!row.embedding) continue;
 
       let embedding;
@@ -220,7 +220,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
 
       const score = cosineSimilarity(queryEmbedding, embedding);
 
-      if (score < THRESHOLD) continue;
+      if (score < 0.03) continue;
 
       results.push({
         url: row.url,
@@ -232,14 +232,16 @@ app.post("/api/buscarPorImagen", async (req, res) => {
         score,
       });
 
-      // 🔥 corte temprano
-      if (processed >= MAX_SCAN) break;
+      // ===============================
+      // LIMITES SEGUROS
+      // ===============================
+      if (processed >= 6000) break;
 
-      if (results.length >= MAX_RESULTS && processed > 4000) break;
+      if (results.length >= 120 && processed > 4000) break;
 
-      // 🔥 liberar event loop
-      if (processed % YIELD_EVERY === 0) {
-        await new Promise((r) => setImmediate(r));
+      if (processed % 800 === 0) {
+        await new Promise(r => setImmediate(r));
+        console.log("🔄 procesados:", processed, "resultados:", results.length);
       }
     }
 
