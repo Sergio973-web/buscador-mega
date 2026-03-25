@@ -253,7 +253,8 @@ app.post("/api/buscarPorImagen", async (req, res) => {
         await new Promise(r => setImmediate(r));
         console.log("🔄 procesados:", processed, "resultados:", results.length);
       }
-
+    }
+    
     results.sort((a, b) => b.score - a.score);
 
     console.log("📊 RESULTADOS:", results.length);
