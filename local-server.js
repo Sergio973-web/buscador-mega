@@ -237,8 +237,8 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       // ===============================
 
       // 🔥 corte dinámico (cuando ya hay suficientes resultados)
-      if (results.length >= 150 && processed > 5000) {
-        console.log("🛑 corte temprano inteligente");
+      if (processed > 6000 && results.length > processed * 0.4) {
+        console.log("🛑 corte inteligente proporcional");
         break;
       }
 
@@ -254,7 +254,7 @@ app.post("/api/buscarPorImagen", async (req, res) => {
         console.log("🔄 procesados:", processed, "resultados:", results.length);
       }
     }
-    
+
     results.sort((a, b) => b.score - a.score);
 
     console.log("📊 RESULTADOS:", results.length);
