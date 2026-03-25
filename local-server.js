@@ -233,17 +233,26 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       });
 
       // ===============================
-      // LIMITES SEGUROS
+      // LIMITES INTELIGENTES
       // ===============================
-      if (processed >= 6000) break;
 
-      if (results.length >= 120 && processed > 4000) break;
+      // 🔥 corte dinámico (cuando ya hay suficientes resultados)
+      if (results.length >= 150 && processed > 5000) {
+        console.log("🛑 corte temprano inteligente");
+        break;
+      }
 
+      // 🔥 límite duro (protección total)
+      if (processed >= 13000) {
+        console.log("🛑 límite máximo alcanzado");
+        break;
+      }
+
+      // 🔥 liberar event loop
       if (processed % 800 === 0) {
         await new Promise(r => setImmediate(r));
         console.log("🔄 procesados:", processed, "resultados:", results.length);
       }
-    }
 
     results.sort((a, b) => b.score - a.score);
 
