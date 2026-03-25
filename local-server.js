@@ -106,6 +106,7 @@ function cosineSimilarity(a, b) {
 const THRESHOLD = 0.04;   // 🔥 más resultados sin mucho ruido
 const MAX_RESULTS = 100;   // límite seguro
 const YIELD_EVERY = 800;  // evita freeze
+const MAX_SCAN = 6000;
 
 // ===============================
 // SEARCH IMAGE (FINAL)
@@ -196,8 +197,10 @@ app.post("/api/buscarPorImagen", async (req, res) => {
       });
 
       // 🔥 corte temprano
-      if (results.length >= MAX_RESULTS && processed > 3000) break;
+      if (processed >= MAX_SCAN) break;
 
+      if (results.length >= MAX_RESULTS && processed > 4000) break;
+      
       // 🔥 liberar event loop
       if (processed % YIELD_EVERY === 0) {
         await new Promise((r) => setImmediate(r));
