@@ -20,6 +20,28 @@ const db = new Database(dbPath);
 
 console.log("🗄️ Conectando SQLite...");
 
+// optimización básica
+db.pragma("journal_mode = WAL");
+db.pragma("synchronous = NORMAL");
+db.pragma("temp_store = MEMORY");
+
+// ======================================================
+// SCHEMA OPTIMIZADO (LIVIANO)
+// ======================================================
+db.exec(`
+CREATE TABLE IF NOT EXISTS embeddings (
+  url TEXT PRIMARY KEY,
+  titulo TEXT,
+  imagenCloud TEXT,
+  precio TEXT,
+  categoria TEXT,
+  proveedor TEXT,
+  embedding TEXT
+);
+`);
+
+console.log("✅ Schema optimizado listo");
+
 // ======================================================
 // OPENAI
 // ======================================================
@@ -38,16 +60,13 @@ const insert = db.prepare(`
   INSERT INTO embeddings (
     url,
     titulo,
-    titulo_original,
-    descripcion,
-    imagen,
     imagenCloud,
     precio,
     categoria,
     proveedor,
     embedding
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
 // ======================================================
@@ -61,6 +80,8 @@ console.log("📦 Productos totales:", productos.length);
 // CONFIG
 // ======================================================
 const MAX = Infinity;
+const MAX_DB_SIZE = 480 * 1024 * 1024; // 480MB límite seguro
+
 let count = 0;
 let skipped = 0;
 
@@ -85,7 +106,7 @@ for (const p of productos) {
 
   try {
     // =========================
-    // VISION
+    // VISION (DESCRIPCIÓN)
     // =========================
     const vision = await openai.responses.create({
       model: "gpt-4.1-mini",
@@ -124,14 +145,11 @@ for (const p of productos) {
     const vector = JSON.stringify(emb.data[0].embedding);
 
     // =========================
-    // INSERT FULL RECORD
+    // INSERT OPTIMIZADO
     // =========================
     insert.run(
       p.url,
       p.titulo || "",
-      p.titulo_original || "",
-      descripcion,
-      p.imagen || "",
       p.imagenCloud || "",
       p.precio || "",
       p.categoria || "",
@@ -143,7 +161,19 @@ for (const p of productos) {
 
     console.log(`✅ [${count}] ${p.titulo}`);
 
-    // opcional throttle (evita rate limit)
+    // =========================
+    // CORTE POR TAMAÑO (CRÍTICO)
+    // =========================
+    const size = fs.statSync(dbPath).size;
+
+    if (size >= MAX_DB_SIZE) {
+      console.log("🛑 DB alcanzó límite de 480MB, corte seguro");
+      break;
+    }
+
+    // =========================
+    // THROTTLE (anti rate limit)
+    // =========================
     await new Promise(r => setTimeout(r, 150));
 
     if (count >= MAX) break;
